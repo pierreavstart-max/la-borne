@@ -49,7 +49,7 @@ export default function LoginPage() {
                 onChange={e => setEmail(e.target.value)}
                 placeholder="votre@email.fr"
                 required
-                style={{width:'100%',padding:'10px 12px',fontSize:'13px',border:'1px solid #CCC9C0',borderRadius:'6px',fontFamily:'inherit'}}
+                style={{width:'100%',padding:'10px 12px',fontSize:'13px',border:'1px solid #CCC9C0',borderRadius:'6px',fontFamily:'inherit',color:'#1A1916'}}
               />
             </div>
             <div style={{marginBottom:'20px'}}>
@@ -60,7 +60,7 @@ export default function LoginPage() {
                 onChange={e => setPassword(e.target.value)}
                 placeholder="••••••••"
                 required
-                style={{width:'100%',padding:'10px 12px',fontSize:'13px',border:'1px solid #CCC9C0',borderRadius:'6px',fontFamily:'inherit'}}
+                style={{width:'100%',padding:'10px 12px',fontSize:'13px',border:'1px solid #CCC9C0',borderRadius:'6px',fontFamily:'inherit',color:'#1A1916'}}
               />
             </div>
             <button

@@ -1,22 +1,72 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { getClients, addClient, deleteClient } from '../../lib/db';
 
-const CLIENTS = [
-  {initials:'IB',bg:'#E6F1FB',color:'#0C447C',name:'Institut du Beau-Joly',ville:'Mirecourt',contact:'Camille Miclo',email:'camille@beau-joly.fr',role:'Établissement',bornes:'1 borne',commu:3,statut:'Actif',statutColor:'#18865A',statutBg:'#E6F5ED'},
-  {initials:'OL',bg:'#E1F5EE',color:'#085041',name:'Odcvl La Mauselaine',ville:'Gérardmer',contact:'Juliette Perrin',email:'mauselaine@odcvl.org',role:'ODCVL',bornes:'2 bornes',commu:5,statut:'Actif',statutColor:'#18865A',statutBg:'#E6F5ED'},
-  {initials:'OP',bg:'#FAEEDA',color:'#412402',name:'Odcvl Pont Du Metty',ville:'La Bresse',contact:'Martine Vaxelaire',email:'martine@odcvl.org',role:'ODCVL',bornes:'1 borne',commu:0,statut:'Essai',statutColor:'#9A5E0A',statutBg:'#FDF3E3'},
-];
+const ROLES = ['ODCVL', 'Établissement', 'Commerce', 'Mairie', 'Autre'];
 
 export default function ClientsPage() {
+  const [clients, setClients] = useState([]);
   const [search, setSearch] = useState('');
-  const filtered = CLIENTS.filter(c =>
-    c.name.toLowerCase().includes(search.toLowerCase()) ||
-    c.contact.toLowerCase().includes(search.toLowerCase())
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const [prenom, setPrenom] = useState('');
+  const [nom, setNom] = useState('');
+  const [email, setEmail] = useState('');
+  const [tel, setTel] = useState('');
+  const [societe, setSociete] = useState('');
+  const [role, setRole] = useState('');
+  const [statut, setStatut] = useState('Actif');
+
+  useEffect(() => {
+    loadClients();
+  }, []);
+
+  async function loadClients() {
+    setLoading(true);
+    const data = await getClients();
+    setClients(data);
+    setLoading(false);
+  }
+
+  async function handleAdd(e) {
+    e.preventDefault();
+    setSaving(true);
+    await addClient({ prenom, nom, email, tel, societe, role, statut });
+    setPrenom(''); setNom(''); setEmail(''); setTel('');
+    setSociete(''); setRole(''); setStatut('Actif');
+    setShowForm(false);
+    await loadClients();
+    setSaving(false);
+  }
+
+  async function handleDelete(id) {
+    if (!confirm('Supprimer ce client ?')) return;
+    await deleteClient(id);
+    await loadClients();
+  }
+
+  const filtered = clients.filter(c =>
+    (c.nom + ' ' + c.prenom + ' ' + c.societe + ' ' + c.email)
+      .toLowerCase().includes(search.toLowerCase())
   );
+
+  const inputStyle = {
+    width:'100%', padding:'8px 11px', fontSize:'12px',
+    border:'1px solid #CCC9C0', borderRadius:'6px', fontFamily:'inherit',
+    color:'#1A1916'
+  };
+  const labelStyle = {
+    fontSize:'10px', fontWeight:'600', color:'#6B6860',
+    textTransform:'uppercase', letterSpacing:'.04em',
+    marginBottom:'4px', display:'block'
+  };
 
   return (
     <div style={{padding:'24px'}}>
-      {/* Barre de recherche */}
+
+      {/* Barre */}
       <div style={{display:'flex',gap:'8px',marginBottom:'14px'}}>
         <input
           value={search}
@@ -24,51 +74,98 @@ export default function ClientsPage() {
           placeholder="Rechercher client, contact…"
           style={{flex:1,padding:'8px 12px',fontSize:'12px',border:'1px solid #E4E2DC',borderRadius:'6px',fontFamily:'inherit'}}
         />
-        <button style={{padding:'8px 14px',background:'#2B5CE6',color:'#fff',border:'none',borderRadius:'6px',fontSize:'12px',fontWeight:'500',cursor:'pointer',fontFamily:'inherit'}}>
+        <button
+          onClick={() => setShowForm(!showForm)}
+          style={{padding:'8px 14px',background:'#2B5CE6',color:'#fff',border:'none',borderRadius:'6px',fontSize:'12px',fontWeight:'500',cursor:'pointer',fontFamily:'inherit'}}
+        >
           + Nouveau client
         </button>
       </div>
 
+      {/* Formulaire nouveau client */}
+      {showForm && (
+        <div style={{background:'#fff',border:'1px solid #E4E2DC',borderRadius:'10px',padding:'18px',marginBottom:'16px'}}>
+          <div style={{fontSize:'13px',fontWeight:'600',color:'#1A1916',marginBottom:'14px'}}>Nouveau client</div>
+          <form onSubmit={handleAdd}>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px',marginBottom:'10px'}}>
+              <div><label style={labelStyle}>Prénom *</label><input value={prenom} onChange={e=>setPrenom(e.target.value)} style={inputStyle} required/></div>
+              <div><label style={labelStyle}>Nom *</label><input value={nom} onChange={e=>setNom(e.target.value)} style={inputStyle} required/></div>
+              <div><label style={labelStyle}>Email *</label><input type="email" value={email} onChange={e=>setEmail(e.target.value)} style={inputStyle} required/></div>
+              <div><label style={labelStyle}>Téléphone</label><input value={tel} onChange={e=>setTel(e.target.value)} style={inputStyle}/></div>
+              <div><label style={labelStyle}>Société</label><input value={societe} onChange={e=>setSociete(e.target.value)} style={inputStyle}/></div>
+              <div>
+                <label style={labelStyle}>Rôle *</label>
+                <select value={role} onChange={e=>setRole(e.target.value)} style={inputStyle} required>
+                  <option value="">— Choisir</option>
+                  {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={labelStyle}>Statut</label>
+                <select value={statut} onChange={e=>setStatut(e.target.value)} style={inputStyle}>
+                  <option value="Actif">Actif</option>
+                  <option value="Essai">Essai</option>
+                  <option value="Inactif">Inactif</option>
+                </select>
+              </div>
+            </div>
+            <div style={{display:'flex',gap:'8px',justifyContent:'flex-end',marginTop:'10px'}}>
+              <button type="button" onClick={() => setShowForm(false)} style={{padding:'7px 14px',background:'#fff',border:'1px solid #E4E2DC',borderRadius:'6px',fontSize:'12px',cursor:'pointer',fontFamily:'inherit'}}>Annuler</button>
+              <button type="submit" disabled={saving} style={{padding:'7px 14px',background:'#2B5CE6',color:'#fff',border:'none',borderRadius:'6px',fontSize:'12px',fontWeight:'600',cursor:'pointer',fontFamily:'inherit'}}>
+                {saving ? 'Enregistrement...' : 'Créer le client'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
       {/* Table */}
       <div style={{background:'#fff',border:'1px solid #E4E2DC',borderRadius:'10px',overflow:'hidden'}}>
-        <table style={{width:'100%',borderCollapse:'collapse'}}>
-          <thead>
-            <tr style={{background:'#F7F6F3'}}>
-              {['Client','Contact','Rôle','Borne(s)','Commu.','Statut',''].map(h => (
-                <th key={h} style={{padding:'8px 12px',textAlign:'left',fontSize:'10px',color:'#A8A69F',textTransform:'uppercase',letterSpacing:'.05em',fontWeight:'600',borderBottom:'1px solid #E4E2DC'}}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map(c => (
-              <tr key={c.name} style={{borderBottom:'1px solid #E4E2DC',cursor:'pointer'}}
-                onMouseEnter={e => e.currentTarget.style.background='#F7F6F3'}
-                onMouseLeave={e => e.currentTarget.style.background='#fff'}
-              >
-                <td style={{padding:'11px 12px'}}>
-                  <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
-                    <div style={{width:'30px',height:'30px',borderRadius:'50%',background:c.bg,color:c.color,display:'flex',alignItems:'center',justifyContent:'center',fontSize:'10px',fontWeight:'700',flexShrink:0}}>{c.initials}</div>
-                    <div>
-                      <div style={{fontWeight:'500',fontSize:'13px',color:'#1A1916'}}>{c.name}</div>
-                      <div style={{fontSize:'10px',color:'#A8A69F'}}>{c.ville}</div>
-                    </div>
-                  </div>
-                </td>
-                <td style={{padding:'11px 12px'}}>
-                  <div style={{fontSize:'12px',color:'#1A1916'}}>{c.contact}</div>
-                  <div style={{fontSize:'10px',color:'#A8A69F'}}>{c.email}</div>
-                </td>
-                <td style={{padding:'11px 12px'}}><span style={{fontSize:'10px',fontWeight:'600',padding:'2px 8px',borderRadius:'20px',background:'#EBF0FD',color:'#1A3DB8'}}>{c.role}</span></td>
-                <td style={{padding:'11px 12px'}}><span style={{fontFamily:'monospace',fontSize:'10px',background:'#F7F6F3',border:'1px solid #E4E2DC',padding:'2px 7px',borderRadius:'4px'}}>{c.bornes}</span></td>
-                <td style={{padding:'11px 12px'}}><span style={{fontSize:'10px',fontWeight:'600',padding:'2px 8px',borderRadius:'20px',background:'#EBF0FD',color:'#1A3DB8'}}>{c.commu}</span></td>
-                <td style={{padding:'11px 12px'}}><span style={{fontSize:'10px',fontWeight:'600',padding:'2px 8px',borderRadius:'20px',background:c.statutBg,color:c.statutColor}}>{c.statut}</span></td>
-                <td style={{padding:'11px 12px'}}>
-                  <button style={{background:'none',border:'1px solid #E4E2DC',borderRadius:'6px',padding:'3px 8px',cursor:'pointer',fontSize:'11px',color:'#6B6860'}}>Voir</button>
-                </td>
+        {loading ? (
+          <div style={{padding:'40px',textAlign:'center',color:'#A8A69F',fontSize:'12px'}}>Chargement…</div>
+        ) : filtered.length === 0 ? (
+          <div style={{padding:'40px',textAlign:'center',color:'#A8A69F',fontSize:'12px'}}>
+            {clients.length === 0 ? 'Aucun client — créez le premier.' : 'Aucun résultat.'}
+          </div>
+        ) : (
+          <table style={{width:'100%',borderCollapse:'collapse'}}>
+            <thead>
+              <tr style={{background:'#F7F6F3'}}>
+                {['Client','Email','Rôle','Statut',''].map(h => (
+                  <th key={h} style={{padding:'8px 12px',textAlign:'left',fontSize:'10px',color:'#A8A69F',textTransform:'uppercase',letterSpacing:'.05em',fontWeight:'600',borderBottom:'1px solid #E4E2DC'}}>{h}</th>
+                ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {filtered.map(c => (
+                <tr key={c.id} style={{borderBottom:'1px solid #E4E2DC'}}
+                  onMouseEnter={e => e.currentTarget.style.background='#F7F6F3'}
+                  onMouseLeave={e => e.currentTarget.style.background='#fff'}
+                >
+                  <td style={{padding:'11px 12px'}}>
+                    <div style={{fontWeight:'500',fontSize:'13px',color:'#1A1916'}}>{c.prenom} {c.nom}</div>
+                    <div style={{fontSize:'10px',color:'#A8A69F'}}>{c.societe}</div>
+                  </td>
+                  <td style={{padding:'11px 12px',fontSize:'12px',color:'#6B6860'}}>{c.email}</td>
+                  <td style={{padding:'11px 12px'}}>
+                    <span style={{fontSize:'10px',fontWeight:'600',padding:'2px 8px',borderRadius:'20px',background:'#EBF0FD',color:'#1A3DB8'}}>{c.role}</span>
+                  </td>
+                  <td style={{padding:'11px 12px'}}>
+                    <span style={{fontSize:'10px',fontWeight:'600',padding:'2px 8px',borderRadius:'20px',
+                      background:c.statut==='Actif'?'#E6F5ED':c.statut==='Essai'?'#FDF3E3':'#F7F6F3',
+                      color:c.statut==='Actif'?'#18865A':c.statut==='Essai'?'#9A5E0A':'#6B6860'
+                    }}>{c.statut}</span>
+                  </td>
+                  <td style={{padding:'11px 12px'}}>
+                    <button onClick={() => handleDelete(c.id)} style={{background:'#FCEAEA',border:'1px solid #EABABA',borderRadius:'6px',padding:'3px 8px',cursor:'pointer',fontSize:'11px',color:'#C02B2B',fontFamily:'inherit'}}>
+                      Supprimer
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
     </div>
   );
