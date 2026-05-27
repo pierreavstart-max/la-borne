@@ -5,6 +5,7 @@ import { getBornes, addBorne, deleteBorne, getClients } from '../../lib/db';
 export default function BornesPage() {
   const [bornes, setBornes] = useState([]);
   const [clients, setClients] = useState([]);
+  const [ibDevices, setIbDevices] = useState([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -14,13 +15,18 @@ export default function BornesPage() {
   const [adresse, setAdresse] = useState('');
   const [clientEmail, setClientEmail] = useState('');
   const [orient, setOrient] = useState('Portrait');
-  const [statut, setStatut] = useState('En ligne');
+  const [ibDeviceId, setIbDeviceId] = useState('');
 
   useEffect(() => {
     async function load() {
-      const [b, c] = await Promise.all([getBornes(), getClients()]);
+      const [b, c, ibRes] = await Promise.all([
+        getBornes(),
+        getClients(),
+        fetch('/api/infobeamer/devices').then(r => r.json()),
+      ]);
       setBornes(b);
       setClients(c);
+      setIbDevices(ibRes.devices || []);
       setLoading(false);
     }
     load();
@@ -42,17 +48,19 @@ export default function BornesPage() {
     e.preventDefault();
     setSaving(true);
     const selectedClient = clients.find(c => c.email === clientEmail);
+    const selectedDevice = ibDevices.find(d => d.id === parseInt(ibDeviceId));
     await addBorne({
       nom,
       ref: genRef(nom),
-      adresse,
+      adresse: selectedDevice?.location || adresse,
       client: selectedClient ? `${selectedClient.prenom} ${selectedClient.nom}` : '',
-      clientEmail: clientEmail,
+      clientEmail,
       orient,
-      statut,
+      ibDeviceId: ibDeviceId ? parseInt(ibDeviceId) : null,
+      statut: selectedDevice?.is_online ? 'En ligne' : 'Hors ligne',
     });
     setNom(''); setAdresse(''); setClientEmail('');
-    setOrient('Portrait'); setStatut('En ligne');
+    setOrient('Portrait'); setIbDeviceId('');
     setShowForm(false);
     await loadBornes();
     setSaving(false);
@@ -62,6 +70,20 @@ export default function BornesPage() {
     if (!confirm('Supprimer cette borne ?')) return;
     await deleteBorne(id);
     await loadBornes();
+  }
+
+  // Fusionne les données Firestore avec info-beamer
+  function getDeviceStatus(borne) {
+    if (!borne.ibDeviceId) return borne.statut || 'Non connectée';
+    const device = ibDevices.find(d => d.id === borne.ibDeviceId);
+    if (!device) return 'Non trouvée';
+    return device.is_online ? 'En ligne' : 'Hors ligne';
+  }
+
+  function getDeviceName(borne) {
+    if (!borne.ibDeviceId) return null;
+    const device = ibDevices.find(d => d.id === borne.ibDeviceId);
+    return device?.description || null;
   }
 
   const filtered = bornes.filter(b =>
@@ -111,10 +133,6 @@ export default function BornesPage() {
                 <input value={nom ? genRef(nom) : ''} style={{ ...inputStyle, background: '#F7F6F3', color: '#A8A69F' }} readOnly/>
               </div>
               <div>
-                <label style={labelStyle}>Adresse</label>
-                <input value={adresse} onChange={e => setAdresse(e.target.value)} style={inputStyle}/>
-              </div>
-              <div>
                 <label style={labelStyle}>Client assigné</label>
                 <select value={clientEmail} onChange={e => setClientEmail(e.target.value)} style={inputStyle}>
                   <option value="">— Aucun</option>
@@ -126,17 +144,21 @@ export default function BornesPage() {
                 </select>
               </div>
               <div>
+                <label style={labelStyle}>Appareil info-beamer</label>
+                <select value={ibDeviceId} onChange={e => setIbDeviceId(e.target.value)} style={inputStyle}>
+                  <option value="">— Aucun</option>
+                  {ibDevices.map(d => (
+                    <option key={d.id} value={d.id}>
+                      {d.description} — {d.is_online ? '🟢 En ligne' : '🔴 Hors ligne'}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
                 <label style={labelStyle}>Orientation *</label>
                 <select value={orient} onChange={e => setOrient(e.target.value)} style={inputStyle}>
                   <option value="Portrait">Portrait</option>
                   <option value="Paysage">Paysage</option>
-                </select>
-              </div>
-              <div>
-                <label style={labelStyle}>Statut</label>
-                <select value={statut} onChange={e => setStatut(e.target.value)} style={inputStyle}>
-                  <option value="En ligne">En ligne</option>
-                  <option value="Hors ligne">Hors ligne</option>
                 </select>
               </div>
             </div>
@@ -161,36 +183,51 @@ export default function BornesPage() {
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ background: '#F7F6F3' }}>
-                {['Borne', 'Référence', 'Adresse', 'Client', 'Orientation', 'Statut', ''].map(h => (
+                {['Borne', 'Référence', 'Client', 'Info-beamer', 'Orientation', 'Statut', ''].map(h => (
                   <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: '10px', color: '#A8A69F', textTransform: 'uppercase', letterSpacing: '.05em', fontWeight: '600', borderBottom: '1px solid #E4E2DC' }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {filtered.map(b => (
-                <tr key={b.id} style={{ borderBottom: '1px solid #E4E2DC' }}
-                  onMouseEnter={e => e.currentTarget.style.background = '#F7F6F3'}
-                  onMouseLeave={e => e.currentTarget.style.background = '#fff'}
-                >
-                  <td style={{ padding: '11px 12px', fontWeight: '500', fontSize: '13px', color: '#1A1916' }}>{b.nom}</td>
-                  <td style={{ padding: '11px 12px' }}>
-                    <span style={{ fontFamily: 'monospace', fontSize: '10px', background: '#F7F6F3', border: '1px solid #E4E2DC', padding: '2px 7px', borderRadius: '4px' }}>{b.ref}</span>
-                  </td>
-                  <td style={{ padding: '11px 12px', fontSize: '11px', color: '#6B6860' }}>{b.adresse}</td>
-                  <td style={{ padding: '11px 12px', fontSize: '12px', color: '#1A1916' }}>{b.client}</td>
-                  <td style={{ padding: '11px 12px' }}>
-                    <span style={{ fontSize: '10px', fontWeight: '600', padding: '2px 8px', borderRadius: '20px', background: b.orient === 'Portrait' ? '#F0ECFB' : '#F7F6F3', color: b.orient === 'Portrait' ? '#5B3DB8' : '#6B6860' }}>{b.orient}</span>
-                  </td>
-                  <td style={{ padding: '11px 12px' }}>
-                    <span style={{ fontSize: '10px', fontWeight: '600', padding: '2px 8px', borderRadius: '20px', background: b.statut === 'En ligne' ? '#E6F5ED' : '#FCEAEA', color: b.statut === 'En ligne' ? '#18865A' : '#C02B2B' }}>{b.statut}</span>
-                  </td>
-                  <td style={{ padding: '11px 12px' }}>
-                    <button onClick={() => handleDelete(b.id)} style={{ background: '#FCEAEA', border: '1px solid #EABABA', borderRadius: '6px', padding: '3px 8px', cursor: 'pointer', fontSize: '11px', color: '#C02B2B', fontFamily: 'inherit' }}>
-                      Supprimer
-                    </button>
-                  </td>
-                </tr>
-              ))}
+              {filtered.map(b => {
+                const status = getDeviceStatus(b);
+                const deviceName = getDeviceName(b);
+                return (
+                  <tr key={b.id} style={{ borderBottom: '1px solid #E4E2DC' }}
+                    onMouseEnter={e => e.currentTarget.style.background = '#F7F6F3'}
+                    onMouseLeave={e => e.currentTarget.style.background = '#fff'}
+                  >
+                    <td style={{ padding: '11px 12px' }}>
+                      <div style={{ fontWeight: '500', fontSize: '13px', color: '#1A1916' }}>{b.nom}</div>
+                      <div style={{ fontSize: '10px', color: '#A8A69F' }}>{b.adresse}</div>
+                    </td>
+                    <td style={{ padding: '11px 12px' }}>
+                      <span style={{ fontFamily: 'monospace', fontSize: '10px', background: '#F7F6F3', border: '1px solid #E4E2DC', padding: '2px 7px', borderRadius: '4px' }}>{b.ref}</span>
+                    </td>
+                    <td style={{ padding: '11px 12px', fontSize: '12px', color: '#1A1916' }}>{b.client}</td>
+                    <td style={{ padding: '11px 12px', fontSize: '11px', color: '#6B6860' }}>
+                      {deviceName ? (
+                        <span style={{ fontSize: '10px', background: '#F7F6F3', border: '1px solid #E4E2DC', padding: '2px 7px', borderRadius: '4px' }}>{deviceName}</span>
+                      ) : (
+                        <span style={{ fontSize: '10px', color: '#A8A69F', fontStyle: 'italic' }}>Non lié</span>
+                      )}
+                    </td>
+                    <td style={{ padding: '11px 12px' }}>
+                      <span style={{ fontSize: '10px', fontWeight: '600', padding: '2px 8px', borderRadius: '20px', background: b.orient === 'Portrait' ? '#F0ECFB' : '#F7F6F3', color: b.orient === 'Portrait' ? '#5B3DB8' : '#6B6860' }}>{b.orient}</span>
+                    </td>
+                    <td style={{ padding: '11px 12px' }}>
+                      <span style={{ fontSize: '10px', fontWeight: '600', padding: '2px 8px', borderRadius: '20px', background: status === 'En ligne' ? '#E6F5ED' : '#FCEAEA', color: status === 'En ligne' ? '#18865A' : '#C02B2B' }}>
+                        {status}
+                      </span>
+                    </td>
+                    <td style={{ padding: '11px 12px' }}>
+                      <button onClick={() => handleDelete(b.id)} style={{ background: '#FCEAEA', border: '1px solid #EABABA', borderRadius: '6px', padding: '3px 8px', cursor: 'pointer', fontSize: '11px', color: '#C02B2B', fontFamily: 'inherit' }}>
+                        Supprimer
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         )}
