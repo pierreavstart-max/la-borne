@@ -48,7 +48,7 @@ export default function ProfilPage() {
   };
   const inputStyle = {
     width:'100%',padding:'8px 11px',fontSize:'12px',
-    border:'1px solid #CCC9C0',borderRadius:'6px',fontFamily:'inherit'
+    border:'1px solid #CCC9C0',borderRadius:'6px',fontFamily:'inherit' ,color: '#1A1916'
   };
   const labelStyle = {
     fontSize:'10px',fontWeight:'600',color:'#6B6860',
