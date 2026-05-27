@@ -15,9 +15,14 @@ export default function ClientDashboard() {
       setNotifications(notifs);
     });
     getMessages().then(msgs => {
-      console.log('Messages:', msgs);
-      setMessages(msgs);
-    });
+  const email = localStorage.getItem('clientEmail');
+  // Filtre les messages destinés à ce client
+  const filtered = msgs.filter(m =>
+    m.destType === 'tous' ||
+    (m.destType === 'client' && m.dest === email)
+  );
+  setMessages(filtered);
+});
   }, []);
 
   async function dismissNotif(id) {
