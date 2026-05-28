@@ -52,6 +52,7 @@ console.log('Orientation:', orientationValue);
         clientSociete: client?.societe || '',
         orientation: orientationValue,
         filename,
+        type: demande.type,
       }),
     });
     const genData = await genRes.json();
