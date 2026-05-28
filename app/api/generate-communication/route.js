@@ -1,7 +1,5 @@
 import { NextResponse } from 'next/server';
 import { createCanvas } from 'canvas';
-import { writeFileSync } from 'fs';
-import { join } from 'path';
 
 export async function POST(request) {
   try {
@@ -93,9 +91,6 @@ export async function POST(request) {
     }
 
     const buffer = canvas.toBuffer('image/png');
-
-    // Debug
-    writeFileSync(join(process.cwd(), 'debug-output.png'), buffer);
 
     // Upload sur info-beamer
     const form = new global.FormData();
