@@ -84,12 +84,13 @@ function generateImage(clientNom, clientSociete, orientation) {
   return canvas.toBuffer('image/png');
 }
 
-async function imageToMp4(pngBuffer, outputPath) {
+async function imageToMp4(pngBuffer, filename) {
   const ffmpeg = (await import('fluent-ffmpeg')).default;
   const ffmpegInstaller = (await import('@ffmpeg-installer/ffmpeg')).default;
   ffmpeg.setFfmpegPath(ffmpegInstaller.path);
-  
-  const tmpPng = outputPath.replace('.mp4', '_tmp.png');
+
+  const tmpPng = `/tmp/${filename}_tmp.png`;
+  const tmpMp4 = `/tmp/${filename}_tmp.mp4`;
   writeFileSync(tmpPng, pngBuffer);
 
   return new Promise((resolve, reject) => {
@@ -103,10 +104,10 @@ async function imageToMp4(pngBuffer, outputPath) {
         '-vf scale=1920:1080',
         '-r 25',
       ])
-      .output(outputPath)
+      .output(tmpMp4)
       .on('end', () => {
         try { unlinkSync(tmpPng); } catch {}
-        resolve();
+        resolve(tmpMp4);
       })
       .on('error', (err) => {
         try { unlinkSync(tmpPng); } catch {}
@@ -143,13 +144,12 @@ export async function POST(request) {
     let ibData;
 
     if (isVideo) {
-      const tmpMp4 = join(process.cwd(), filename + '_tmp.mp4');
-      await imageToMp4(pngBuffer, tmpMp4);
-      const { readFileSync } = await import('fs');
-      const mp4Buffer = readFileSync(tmpMp4);
-      try { unlinkSync(tmpMp4); } catch {}
-      ibData = await uploadToInfobeamer(mp4Buffer, filename + '.mp4', 'video/mp4');
-    } else {
+  const tmpMp4Path = await imageToMp4(pngBuffer, filename);
+  const { readFileSync } = await import('fs');
+  const mp4Buffer = readFileSync(tmpMp4Path);
+  try { unlinkSync(tmpMp4Path); } catch {}
+  ibData = await uploadToInfobeamer(mp4Buffer, filename + '.mp4', 'video/mp4');
+} else {
       ibData = await uploadToInfobeamer(pngBuffer, filename + '.png', 'image/png');
     }
 
