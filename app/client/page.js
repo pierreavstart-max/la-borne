@@ -15,12 +15,16 @@ export default function ClientDashboard() {
       setNotifications(notifs);
     });
     getMessages().then(msgs => {
-  const email = localStorage.getItem('clientEmail');
-  // Filtre les messages destinés à ce client
-  const filtered = msgs.filter(m =>
-    m.destType === 'tous' ||
-    (m.destType === 'client' && m.dest === email)
-  );
+  const filtered = msgs
+    .filter(m =>
+      m.destType === 'tous' ||
+      (m.destType === 'client' && m.dest === email)
+    )
+    .sort((a, b) => {
+      const dateA = a.createdAt?.toDate?.() || new Date(0);
+      const dateB = b.createdAt?.toDate?.() || new Date(0);
+      return dateB - dateA;
+    });
   setMessages(filtered);
 });
   }, []);

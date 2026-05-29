@@ -67,6 +67,10 @@ export async function addDemande(data) {
   });
 }
 
+export async function archiverDemande(id) {
+  await updateDoc(doc(db, 'demandes', id), { archived: true });
+}
+
 export async function updateDemande(id, data) {
   await updateDoc(doc(db, 'demandes', id), data);
 }
