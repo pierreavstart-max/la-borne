@@ -2,8 +2,15 @@ import { NextResponse } from 'next/server';
 import { createCanvas } from 'canvas';
 import { writeFileSync, unlinkSync } from 'fs';
 import { join } from 'path';
+import { registerFont } from 'canvas';
+import { existsSync } from 'fs';
 
 function generateImage(clientNom, clientSociete, orientation) {
+   const fontPath = join(process.cwd(), 'public/fonts/NotoSans-Bold.ttf');
+  if (existsSync(fontPath)) {
+    registerFont(fontPath, { family: 'NotoSans' });
+  }
+  const fontFamily = existsSync(fontPath) ? 'NotoSans' : 'fontFamily';
   const canvasW = 1920;
   const canvasH = 1080;
   const canvas = createCanvas(canvasW, canvasH);
@@ -25,7 +32,7 @@ function generateImage(clientNom, clientSociete, orientation) {
     ctx.translate(boxX + boxW / 2, canvasH / 2);
     ctx.rotate(Math.PI / 2);
     ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 90px Arial';
+    ctx.font = 'bold 90px fontFamily';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText('BIENVENUE', 0, 0);
@@ -35,7 +42,7 @@ function generateImage(clientNom, clientSociete, orientation) {
     ctx.translate(150, canvasH / 2);
     ctx.rotate(Math.PI / 2);
     ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 36px Arial';
+    ctx.font = 'bold 36px fontFamily';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(clientSociete || clientNom, 0, 0);
@@ -45,7 +52,7 @@ function generateImage(clientNom, clientSociete, orientation) {
     ctx.translate(80, canvasH / 2);
     ctx.rotate(Math.PI / 2);
     ctx.fillStyle = 'rgba(255,255,255,0.6)';
-    ctx.font = '24px Arial';
+    ctx.font = '24px fontFamily';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText('www.la-borne.fr', 0, 0);
@@ -64,19 +71,19 @@ function generateImage(clientNom, clientSociete, orientation) {
     ctx.translate(canvasW / 2, canvasH / 2);
     ctx.rotate(-Math.PI / 2);
     ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 100px Arial';
+    ctx.font = 'bold 100px fontFamily';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText('BIENVENUE', 0, 0);
     ctx.restore();
 
     ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 36px Arial';
+    ctx.font = 'bold 36px fontFamily';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'bottom';
     ctx.fillText(clientSociete || clientNom, 60, canvasH - 60);
 
-    ctx.font = '28px Arial';
+    ctx.font = '28px fontFamily';
     ctx.fillStyle = 'rgba(255,255,255,0.6)';
     ctx.fillText('www.la-borne.fr', 60, canvasH - 20);
   }
