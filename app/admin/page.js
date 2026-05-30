@@ -23,13 +23,17 @@ export default function AdminDashboard() {
         getDemandes(),
         fetch('/api/infobeamer/devices').then(r => r.json()),
       ]);
+      const devices = devicesRes.devices || [];
       setClients(clientsData);
       setBornes(bornesData);
-      setIbDevices(devicesRes.devices || []);
+      setIbDevices(devices);
       setStats({
         clients: clientsData.length,
         bornes: bornesData.length,
-        bornesEnLigne: bornesData.filter(b => b.statut === 'En ligne').length,
+        bornesEnLigne: bornesData.filter(b => {
+          const device = devices.find(d => d.id === b.ibDeviceId);
+          return device ? device.is_online : b.statut === 'En ligne';
+        }).length,
         demandesEnAttente: demandesData.filter(d => d.statut === 'En attente' && !d.archived).length,
       });
       setLoading(false);
@@ -37,7 +41,6 @@ export default function AdminDashboard() {
     loadData();
   }, []);
 
-  // Fusionne bornes Firestore avec positions GPS info-beamer
   function getBornesWithGeo() {
     return bornes
       .map(b => {
@@ -130,7 +133,7 @@ export default function AdminDashboard() {
             <div style={{ padding: '30px', textAlign: 'center', color: '#A8A69F', fontSize: '12px', gridColumn: '1/-1' }}>Aucune borne</div>
           ) : bornes.map(b => {
             const device = ibDevices.find(d => d.id === b.ibDeviceId);
-            const isOnline = device?.is_online ?? (b.statut === 'En ligne');
+            const isOnline = device ? device.is_online : b.statut === 'En ligne';
             return (
               <div key={b.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '11px 14px', borderBottom: '1px solid #E4E2DC', borderRight: '1px solid #E4E2DC' }}>
                 <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: isOnline ? '#1D9E75' : '#E24B4A', boxShadow: isOnline ? '0 0 0 3px rgba(29,158,117,.15)' : 'none', flexShrink: 0 }}></div>
