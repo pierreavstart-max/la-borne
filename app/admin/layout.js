@@ -109,7 +109,7 @@ export default function AdminLayout({ children }) {
       {showClientPicker && (
         <div
           onClick={() => setShowClientPicker(false)}
-          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.35)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(2px)' }}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.35)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(2px)' }}
         >
           <div
             onClick={e => e.stopPropagation()}

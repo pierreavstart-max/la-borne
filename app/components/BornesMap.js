@@ -14,6 +14,9 @@ export default function BornesMap({ bornes }) {
     import('leaflet').then(L => {
       L = L.default || L;
 
+// Assure que la carte reste derrière les modals
+mapRef.current.style.zIndex = '0';
+
       // Fix icônes
       delete L.Icon.Default.prototype._getIconUrl;
       L.Icon.Default.mergeOptions({
