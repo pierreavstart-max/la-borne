@@ -1,32 +1,40 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { getNotifications, deleteNotification, getMessages } from '../lib/db';
+import { getNotifications, deleteNotification, getMessages, getBornes, getDemandesClient } from '../lib/db';
 
 export default function ClientDashboard() {
   const [notifications, setNotifications] = useState([]);
   const [messages, setMessages] = useState([]);
+  const [stats, setStats] = useState({ bornes: 0, comms: 0, enAttente: 0 });
 
   useEffect(() => {
     const email = localStorage.getItem('clientEmail');
-    console.log('Email depuis localStorage:', email);
     if (!email) return;
-    getNotifications(email).then(notifs => {
-      console.log('Notifs:', notifs);
-      setNotifications(notifs);
-    });
+
+    getNotifications(email).then(notifs => setNotifications(notifs));
+
     getMessages().then(msgs => {
-  const filtered = msgs
-    .filter(m =>
-      m.destType === 'tous' ||
-      (m.destType === 'client' && m.dest === email)
-    )
-    .sort((a, b) => {
-      const dateA = a.createdAt?.toDate?.() || new Date(0);
-      const dateB = b.createdAt?.toDate?.() || new Date(0);
-      return dateB - dateA;
+      const filtered = msgs
+        .filter(m => m.destType === 'tous' || (m.destType === 'client' && m.dest === email))
+        .sort((a, b) => {
+          const dateA = a.createdAt?.toDate?.() || new Date(0);
+          const dateB = b.createdAt?.toDate?.() || new Date(0);
+          return dateB - dateA;
+        });
+      setMessages(filtered);
     });
-  setMessages(filtered);
-});
+
+    // Vraies stats
+    Promise.all([getBornes(), getDemandesClient(email)]).then(([allBornes, demandes]) => {
+      const clientBornes = allBornes.filter(b => b.clientEmail === email);
+      const approuvees = demandes.filter(d => d.statut === 'Approuvée' && !d.archived);
+      const enAttente = demandes.filter(d => d.statut === 'En attente' && !d.archived);
+      setStats({
+        bornes: clientBornes.length,
+        comms: approuvees.length,
+        enAttente: enAttente.length,
+      });
+    });
   }, []);
 
   async function dismissNotif(id) {
@@ -34,11 +42,10 @@ export default function ClientDashboard() {
     setNotifications(prev => prev.filter(n => n.id !== id));
   }
 
-  const stats = [
-    { label: 'Total commu.', value: '5', sub: 'dont 1 en attente' },
-    { label: 'Images', value: '3', sub: 'Diffusées', subColor: '#18865A' },
-    { label: 'Vidéos', value: '1', sub: 'Diffusée', subColor: '#18865A' },
-    { label: 'Bornes', value: '2', sub: 'En ligne', subColor: '#18865A' },
+  const statCards = [
+    { label: 'Bornes', value: stats.bornes, sub: 'assignées' },
+    { label: 'Communications', value: stats.comms, sub: 'approuvées', subColor: '#18865A' },
+    { label: 'En attente', value: stats.enAttente, sub: 'à traiter', subColor: stats.enAttente > 0 ? '#9A5E0A' : '#A8A69F' },
   ];
 
   return (
@@ -58,11 +65,8 @@ export default function ClientDashboard() {
                 padding: '10px 12px',
                 background: n.type === 'Approuvée' ? '#E6F5ED' : '#FCEAEA',
                 border: `1px solid ${n.type === 'Approuvée' ? '#AADBC5' : '#EABABA'}`,
-                borderRadius: '6px',
-                marginBottom: '8px',
-                display: 'flex',
-                gap: '8px',
-                alignItems: 'flex-start',
+                borderRadius: '6px', marginBottom: '8px',
+                display: 'flex', gap: '8px', alignItems: 'flex-start',
               }}>
                 <span style={{ fontSize: '16px', flexShrink: 0 }}>
                   {n.type === 'Approuvée' ? '✅' : '❌'}
@@ -85,14 +89,9 @@ export default function ClientDashboard() {
             {/* Messages admin */}
             {messages.map(m => (
               <div key={m.id} style={{
-                padding: '10px 12px',
-                background: '#EBF0FD',
-                border: '1px solid #C5D8F8',
-                borderRadius: '6px',
-                marginBottom: '8px',
-                display: 'flex',
-                gap: '8px',
-                alignItems: 'flex-start',
+                padding: '10px 12px', background: '#EBF0FD',
+                border: '1px solid #C5D8F8', borderRadius: '6px',
+                marginBottom: '8px', display: 'flex', gap: '8px', alignItems: 'flex-start',
               }}>
                 <span style={{ fontSize: '14px', flexShrink: 0 }}>📢</span>
                 <div>
@@ -107,8 +106,8 @@ export default function ClientDashboard() {
             </p>
 
             {/* Stats */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', marginTop: '10px' }}>
-              {stats.map(s => (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '6px', marginTop: '10px' }}>
+              {statCards.map(s => (
                 <div key={s.label} style={{ background: '#F7F6F3', border: '1px solid #E4E2DC', borderRadius: '8px', padding: '9px 11px' }}>
                   <div style={{ fontSize: '10px', color: '#A8A69F', textTransform: 'uppercase', letterSpacing: '.05em', fontWeight: '500', marginBottom: '4px' }}>{s.label}</div>
                   <div style={{ fontSize: '20px', fontWeight: '600', color: '#1A1916', lineHeight: 1 }}>{s.value}</div>
