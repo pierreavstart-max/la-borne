@@ -3,10 +3,10 @@ import { useState, useEffect } from 'react';
 import { getBornes, getDemandesClient } from '../../lib/db';
 
 const statutStyle = (s) => ({
-  'Diffusée':   { bg: '#E6F5ED', color: '#18865A' },
+  'Diffus\u00e9e':   { bg: '#E6F5ED', color: '#18865A' },
   'En attente': { bg: '#FDF3E3', color: '#9A5E0A' },
-  'Refusée':    { bg: '#FCEAEA', color: '#C02B2B' },
-  'Approuvée':  { bg: '#E6F5ED', color: '#18865A' },
+  'Refus\u00e9e':    { bg: '#FCEAEA', color: '#C02B2B' },
+  'Approuv\u00e9e':  { bg: '#E6F5ED', color: '#18865A' },
 }[s] || { bg: '#F7F6F3', color: '#6B6860' });
 
 export default function BornesClientPage() {
