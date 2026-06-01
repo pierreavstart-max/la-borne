@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { getBornes, getDemandesClient, updateDemande } from '../../lib/db';
 
 const statutStyle = (s) => ({
@@ -15,6 +15,9 @@ export default function BornesClientPage() {
   const [activeTab, setActiveTab] = useState(0);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(null);
+  const [uploading, setUploading] = useState(null);
+  const [editingComm, setEditingComm] = useState(null);
+  const fileRef = useRef(null);
 
   useEffect(() => {
     async function load() {
@@ -31,7 +34,6 @@ export default function BornesClientPage() {
   }, []);
 
   async function handleDelete(demande) {
-    console.log('Demande à supprimer:', demande.id, demande);
     if (!confirm(`Supprimer la communication "${demande.nom}" ? Cette action est irréversible.`)) return;
     setDeleting(demande.id);
     try {
@@ -43,15 +45,47 @@ export default function BornesClientPage() {
         });
       }
       await updateDemande(demande.id, { archived: true });
-      console.log('updateDemande appelé avec:', demande.id, { archived: true });
       const email = localStorage.getItem('clientEmail');
       const clientDemandes = await getDemandesClient(email);
       setDemandes(clientDemandes);
     } catch (err) {
-      console.error('Erreur suppression:', err);
       alert('Erreur lors de la suppression.');
     }
     setDeleting(null);
+  }
+
+  async function handleUpload(demande, file) {
+    setUploading(demande.id);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      if (demande.ibAssetId) {
+        formData.append('assetId', demande.ibAssetId);
+      }
+
+      const res = await fetch('/api/infobeamer/upload-asset', {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        // Met à jour ibAssetId si c'était un nouvel asset
+        if (!demande.ibAssetId && data.assetId) {
+          await updateDemande(demande.id, { ibAssetId: data.assetId });
+        }
+        alert('Communication mise à jour sur info-beamer !');
+        const email = localStorage.getItem('clientEmail');
+        const clientDemandes = await getDemandesClient(email);
+        setDemandes(clientDemandes);
+      } else {
+        alert('Erreur : ' + data.error);
+      }
+    } catch (err) {
+      alert('Erreur lors de l\'upload.');
+    }
+    setUploading(null);
+    setEditingComm(null);
   }
 
   if (loading) return (
@@ -125,13 +159,14 @@ export default function BornesClientPage() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '12px' }}>
         {borneComms.length === 0 ? (
           <div style={{ gridColumn: '1/-1', padding: '40px', textAlign: 'center', color: '#A8A69F', fontSize: '12px', background: '#fff', border: '1px solid #E4E2DC', borderRadius: '10px' }}>
-            Aucune communication approuv\u00e9e pour cette borne.
+            Aucune communication approuvée pour cette borne.
           </div>
         ) : borneComms.map(c => {
           const st = statutStyle(c.statut);
+          const isEditing = editingComm === c.id;
           return (
             <div key={c.id} style={{ background: '#fff', border: '1px solid #E4E2DC', borderRadius: '10px', overflow: 'hidden' }}>
-              {/* Vignette avec overlay */}
+              {/* Vignette */}
               <div
                 style={{
                   height: borne.orient === 'Portrait' ? '150px' : '90px',
@@ -152,29 +187,48 @@ export default function BornesClientPage() {
                 <div style={{ fontSize: '12px', fontWeight: '700', color: '#fff', textAlign: 'center', padding: '10px' }}>
                   {c.nom}
                 </div>
-                <div
-                  className="del-overlay"
-                  style={{
-                    position: 'absolute', inset: 0,
-                    background: 'rgba(0,0,0,.55)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    opacity: 0, transition: 'opacity .15s',
-                  }}
-                >
+                <div className="del-overlay" style={{
+                  position: 'absolute', inset: 0,
+                  background: 'rgba(0,0,0,.55)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+                  opacity: 0, transition: 'opacity .15s',
+                }}>
+                  <button
+                    onClick={() => setEditingComm(isEditing ? null : c.id)}
+                    style={{ padding: '5px 10px', background: '#EBF0FD', color: '#2B5CE6', border: 'none', borderRadius: '6px', fontSize: '11px', cursor: 'pointer', fontFamily: 'inherit', fontWeight: '500' }}
+                  >
+                    ✏️ Modifier
+                  </button>
                   <button
                     onClick={() => handleDelete(c)}
                     disabled={deleting === c.id}
-                    style={{
-                      padding: '6px 14px', background: '#FCEAEA', color: '#C02B2B',
-                      border: 'none', borderRadius: '6px', fontSize: '11px',
-                      cursor: deleting === c.id ? 'not-allowed' : 'pointer',
-                      fontFamily: 'inherit', fontWeight: '500',
-                    }}
+                    style={{ padding: '5px 10px', background: '#FCEAEA', color: '#C02B2B', border: 'none', borderRadius: '6px', fontSize: '11px', cursor: 'pointer', fontFamily: 'inherit', fontWeight: '500' }}
                   >
-                    {deleting === c.id ? '\u23f3 Suppression\u2026' : '\uD83D\uDDD1\uFE0F Supprimer'}
+                    {deleting === c.id ? '⏳' : '🗑️'}
                   </button>
                 </div>
               </div>
+
+              {/* Formulaire upload */}
+              {isEditing && (
+                <div style={{ padding: '10px 12px', borderTop: '1px solid #E4E2DC', background: '#F7F6F3' }}>
+                  <div style={{ fontSize: '10px', color: '#6B6860', marginBottom: '6px' }}>
+                    Uploader un nouveau fichier ({c.type === 'Vidéo' ? 'MP4' : 'JPG/PNG'}) :
+                  </div>
+                  <input
+                    type="file"
+                    accept={c.type === 'Vidéo' ? 'video/mp4' : 'image/jpeg,image/png'}
+                    onChange={e => {
+                      const file = e.target.files[0];
+                      if (file) handleUpload(c, file);
+                    }}
+                    style={{ fontSize: '11px', color: '#1A1916', width: '100%' }}
+                  />
+                  {uploading === c.id && (
+                    <div style={{ fontSize: '11px', color: '#2B5CE6', marginTop: '6px' }}>⏳ Upload en cours…</div>
+                  )}
+                </div>
+              )}
 
               {/* Footer */}
               <div style={{ padding: '9px 12px', borderTop: '1px solid #E4E2DC' }}>
