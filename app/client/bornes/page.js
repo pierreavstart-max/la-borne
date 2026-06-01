@@ -31,6 +31,7 @@ export default function BornesClientPage() {
   }, []);
 
   async function handleDelete(demande) {
+    console.log('Demande à supprimer:', demande.id, demande);
     if (!confirm(`Supprimer la communication "${demande.nom}" ? Cette action est irréversible.`)) return;
     setDeleting(demande.id);
     try {
