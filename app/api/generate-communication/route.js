@@ -106,7 +106,7 @@ async function imageToMp4(pngBuffer, filename) {
       .inputOptions(['-loop 1'])
       .outputOptions([
         '-c:v libx264',
-        '-t 10',
+        '-t 30',
         '-pix_fmt yuv420p',
         '-vf scale=1920:1080',
         '-r 25',
