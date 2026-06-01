@@ -57,21 +57,24 @@ export default function BornesClientPage() {
   async function handleUpload(demande, file) {
   setUploading(demande.id);
   try {
-    // Renomme le fichier avec le nom original de l'asset info-beamer
     const originalFilename = demande.ibFilename || file.name;
-    const renamedFile = new File([file], originalFilename, { type: file.type });
-
+    
     const formData = new FormData();
-    formData.append('file', renamedFile);
+    formData.append('file', file);
+    formData.append('orientation', borne.orient?.toLowerCase() || 'portrait');
+    formData.append('filename', originalFilename);
 
-    const res = await fetch('/api/infobeamer/upload-asset', {
+    const res = await fetch('/api/infobeamer/upload-rotated', {
       method: 'POST',
       body: formData,
     });
     const data = await res.json();
 
     if (data.success) {
-      await updateDemande(demande.id, { ibAssetId: data.assetId });
+      await updateDemande(demande.id, { 
+        ibAssetId: data.assetId,
+        ibThumb: data.thumb || null,
+      });
       alert('Communication mise à jour sur info-beamer !');
       const email = localStorage.getItem('clientEmail');
       const clientDemandes = await getDemandesClient(email);
@@ -165,47 +168,62 @@ export default function BornesClientPage() {
           return (
             <div key={c.id} style={{ background: '#fff', border: '1px solid #E4E2DC', borderRadius: '10px', overflow: 'hidden' }}>
               {/* Vignette */}
-              <div
-                style={{
-                  height: borne.orient === 'Portrait' ? '150px' : '90px',
-                  background: 'linear-gradient(135deg, #1a3a5c, #2d7a4f)',
-                  position: 'relative',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  cursor: 'pointer',
-                }}
-                onMouseEnter={e => {
-                  const overlay = e.currentTarget.querySelector('.del-overlay');
-                  if (overlay) overlay.style.opacity = '1';
-                }}
-                onMouseLeave={e => {
-                  const overlay = e.currentTarget.querySelector('.del-overlay');
-                  if (overlay) overlay.style.opacity = '0';
-                }}
-              >
-                <div style={{ fontSize: '12px', fontWeight: '700', color: '#fff', textAlign: 'center', padding: '10px' }}>
-                  {c.nom}
-                </div>
-                <div className="del-overlay" style={{
-                  position: 'absolute', inset: 0,
-                  background: 'rgba(0,0,0,.55)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
-                  opacity: 0, transition: 'opacity .15s',
-                }}>
-                  <button
-                    onClick={() => setEditingComm(isEditing ? null : c.id)}
-                    style={{ padding: '5px 10px', background: '#EBF0FD', color: '#2B5CE6', border: 'none', borderRadius: '6px', fontSize: '11px', cursor: 'pointer', fontFamily: 'inherit', fontWeight: '500' }}
-                  >
-                    ✏️ Modifier
-                  </button>
-                  <button
-                    onClick={() => handleDelete(c)}
-                    disabled={deleting === c.id}
-                    style={{ padding: '5px 10px', background: '#FCEAEA', color: '#C02B2B', border: 'none', borderRadius: '6px', fontSize: '11px', cursor: 'pointer', fontFamily: 'inherit', fontWeight: '500' }}
-                  >
-                    {deleting === c.id ? '⏳' : '🗑️'}
-                  </button>
-                </div>
-              </div>
+<div
+  style={{
+    height: borne.orient === 'Portrait' ? '150px' : '90px',
+    background: c.ibThumb ? 'none' : 'linear-gradient(135deg, #1a3a5c, #2d7a4f)',
+    position: 'relative',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    cursor: 'pointer',
+    overflow: 'hidden',
+  }}
+  onMouseEnter={e => {
+    const overlay = e.currentTarget.querySelector('.del-overlay');
+    if (overlay) overlay.style.opacity = '1';
+  }}
+  onMouseLeave={e => {
+    const overlay = e.currentTarget.querySelector('.del-overlay');
+    if (overlay) overlay.style.opacity = '0';
+  }}
+>
+  {c.ibThumb ? (
+    <img 
+      src={c.ibThumb} 
+      alt={c.nom}
+      style={{ 
+        width: '100%', 
+        height: '100%', 
+        objectFit: 'cover',
+        // Pour portrait : affiche en mode portrait dans la preview
+        transform: borne.orient === 'Portrait' ? 'rotate(-90deg) scale(1.8)' : 'none',
+      }} 
+    />
+  ) : (
+    <div style={{ fontSize: '12px', fontWeight: '700', color: '#fff', textAlign: 'center', padding: '10px' }}>
+      {c.nom}
+    </div>
+  )}
+  <div className="del-overlay" style={{
+    position: 'absolute', inset: 0,
+    background: 'rgba(0,0,0,.55)',
+    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+    opacity: 0, transition: 'opacity .15s',
+  }}>
+    <button
+      onClick={() => setEditingComm(isEditing ? null : c.id)}
+      style={{ padding: '5px 10px', background: '#EBF0FD', color: '#2B5CE6', border: 'none', borderRadius: '6px', fontSize: '11px', cursor: 'pointer', fontFamily: 'inherit', fontWeight: '500' }}
+    >
+      ✏️ Modifier
+    </button>
+    <button
+      onClick={() => handleDelete(c)}
+      disabled={deleting === c.id}
+      style={{ padding: '5px 10px', background: '#FCEAEA', color: '#C02B2B', border: 'none', borderRadius: '6px', fontSize: '11px', cursor: 'pointer', fontFamily: 'inherit', fontWeight: '500' }}
+    >
+      {deleting === c.id ? '⏳' : '🗑️'}
+    </button>
+  </div>
+</div>
 
               {/* Formulaire upload */}
               {isEditing && (
