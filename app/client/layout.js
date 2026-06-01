@@ -2,24 +2,23 @@
 import { useEffect, useState } from 'react';
 import { auth } from '../lib/firebase';
 import { signOut } from 'firebase/auth';
+import { usePathname } from 'next/navigation';
 
 const ADMIN_EMAILS = ['pierre@la-borne.fr', 'info@la-borne.fr'];
 
 export default function ClientLayout({ children }) {
   const [user, setUser] = useState(null);
   const [isSimulating, setIsSimulating] = useState(false);
+  const pathname = usePathname();
 
   useEffect(() => {
     const simulating = localStorage.getItem('adminSimulating') === 'true';
     setIsSimulating(simulating);
-
     if (simulating) {
-      // Mode simulation — pas besoin de vérifier Firebase Auth
       const email = localStorage.getItem('clientEmail');
       if (email) setUser({ email });
       return;
     }
-
     const unsub = auth.onAuthStateChanged(u => {
       if (!u) window.location.href = '/';
       else if (ADMIN_EMAILS.includes(u.email)) window.location.href = '/admin';
@@ -39,22 +38,24 @@ export default function ClientLayout({ children }) {
 
   if (!user) return null;
 
+  const navItems = [
+    { label: 'Tableau de bord', href: '/client' },
+    { label: 'Mes bornes',      href: '/client/bornes' },
+    { label: 'Ma bibliothèque', href: '/client/bibliotheque' },
+    { label: 'Mes demandes',    href: '/client/demandes' },
+    { label: 'Mon profil',      href: '/client/profil' },
+  ];
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', fontFamily: 'DM Sans, sans-serif' }}>
-
-      {/* Bannière simulation */}
       {isSimulating && (
         <div style={{ background: '#2B5CE6', color: '#fff', padding: '8px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '12px', flexShrink: 0 }}>
           <span>👁️ Mode simulation — vous voyez l'espace de <strong>{user.email}</strong></span>
-          <button
-            onClick={returnToAdmin}
-            style={{ background: 'rgba(255,255,255,.2)', border: '1px solid rgba(255,255,255,.4)', color: '#fff', borderRadius: '6px', padding: '4px 12px', fontSize: '11px', cursor: 'pointer', fontFamily: 'inherit', fontWeight: '600' }}
-          >
+          <button onClick={returnToAdmin} style={{ background: 'rgba(255,255,255,.2)', border: '1px solid rgba(255,255,255,.4)', color: '#fff', borderRadius: '6px', padding: '4px 12px', fontSize: '11px', cursor: 'pointer', fontFamily: 'inherit', fontWeight: '600' }}>
             ← Retour admin
           </button>
         </div>
       )}
-
       <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
         <div style={{ width: '220px', background: '#1A1916', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
           <div style={{ padding: '16px 18px', borderBottom: '1px solid rgba(255,255,255,.07)', display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -65,32 +66,29 @@ export default function ClientLayout({ children }) {
             </div>
           </div>
           <nav style={{ flex: 1, padding: '8px 0' }}>
-            {[
-              { label: 'Tableau de bord', href: '/client' },
-              { label: 'Mes bornes', href: '/client/bornes' },
-              { label: 'Ma bibliothèque', href: '/client/bibliotheque' },
-              { label: 'Mes demandes', href: '/client/demandes' },
-              { label: 'Mon profil', href: '/client/profil' },
-            ].map(item => (
-              <a key={item.href} href={item.href} style={{ display: 'flex', alignItems: 'center', padding: '8px 18px', fontSize: '12px', color: 'rgba(255,255,255,.5)', textDecoration: 'none' }}>
-                {item.label}
-              </a>
-            ))}
+            {navItems.map(item => {
+              const isActive = pathname === item.href;
+              return (
+                <a key={item.href} href={item.href} style={{
+                  display: 'flex', alignItems: 'center', padding: '8px 18px',
+                  fontSize: '12px', textDecoration: 'none',
+                  color: isActive ? '#fff' : 'rgba(255,255,255,.5)',
+                  background: isActive ? 'rgba(255,255,255,.08)' : 'transparent',
+                  borderLeft: isActive ? '2px solid #2B5CE6' : '2px solid transparent',
+                }}>
+                  {item.label}
+                </a>
+              );
+            })}
           </nav>
           <div style={{ borderTop: '1px solid rgba(255,255,255,.07)', padding: '8px 0' }}>
             {isSimulating ? (
-              <button
-                onClick={returnToAdmin}
-                style={{ display: 'flex', alignItems: 'center', padding: '8px 18px', fontSize: '12px', color: '#60B8FF', background: 'none', border: 'none', cursor: 'pointer', width: '100%', fontFamily: 'inherit' }}
-              >
+              <button onClick={returnToAdmin} style={{ display: 'flex', alignItems: 'center', padding: '8px 18px', fontSize: '12px', color: '#60B8FF', background: 'none', border: 'none', cursor: 'pointer', width: '100%', fontFamily: 'inherit' }}>
                 ← Retour admin
               </button>
             ) : (
               <button
-                onClick={() => {
-                  localStorage.removeItem('clientEmail');
-                  signOut(auth).then(() => window.location.href = '/');
-                }}
+                onClick={() => { localStorage.removeItem('clientEmail'); signOut(auth).then(() => window.location.href = '/'); }}
                 style={{ display: 'flex', alignItems: 'center', padding: '8px 18px', fontSize: '12px', color: 'rgba(255,255,255,.3)', background: 'none', border: 'none', cursor: 'pointer', width: '100%', fontFamily: 'inherit' }}
               >
                 Déconnexion

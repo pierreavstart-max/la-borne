@@ -2,14 +2,17 @@
 import { useEffect, useState } from 'react';
 import { auth } from '../lib/firebase';
 import { signOut } from 'firebase/auth';
-import { getDemandes, getClients } from '../lib/db';
+import { getDemandes, getClients, getDemandesArchivees } from '../lib/db';
+import { usePathname } from 'next/navigation';
 
 export default function AdminLayout({ children }) {
   const [user, setUser] = useState(null);
   const [demandesCount, setDemandesCount] = useState(0);
+  const [assetsCount, setAssetsCount] = useState(0);
   const [showClientPicker, setShowClientPicker] = useState(false);
   const [clients, setClients] = useState([]);
   const [search, setSearch] = useState('');
+  const pathname = usePathname();
 
   useEffect(() => {
     const unsub = auth.onAuthStateChanged(u => {
@@ -20,13 +23,16 @@ export default function AdminLayout({ children }) {
   }, []);
 
   useEffect(() => {
-    async function loadDemandes() {
-      const data = await getDemandes();
-      const enAttente = data.filter(d => d.statut === 'En attente').length;
-      setDemandesCount(enAttente);
+    async function loadCounts() {
+      const [demandes, archives] = await Promise.all([
+        getDemandes(),
+        getDemandesArchivees(),
+      ]);
+      setDemandesCount(demandes.filter(d => d.statut === 'En attente' && !d.archived).length);
+      setAssetsCount(archives.filter(d => d.ibAssetId && d.supprimerIb !== true).length);
     }
-    loadDemandes();
-    const interval = setInterval(loadDemandes, 30000);
+    loadCounts();
+    const interval = setInterval(loadCounts, 30000);
     return () => clearInterval(interval);
   }, []);
 
@@ -48,12 +54,12 @@ export default function AdminLayout({ children }) {
   );
 
   const navItems = [
-    { label: 'Dashboard', href: '/admin' },
-    { label: 'Clients', href: '/admin/clients' },
-    { label: 'Bornes', href: '/admin/bornes' },
-    { label: 'Communications', href: '/admin/communications' },
-    { label: 'Demandes', href: '/admin/demandes', badge: demandesCount },
-    { label: 'Paramètres', href: '/admin/parametres' },
+    { label: 'Dashboard',       href: '/admin' },
+    { label: 'Clients',         href: '/admin/clients' },
+    { label: 'Bornes',          href: '/admin/bornes' },
+    { label: 'Communications',  href: '/admin/communications', badge: assetsCount },
+    { label: 'Demandes',        href: '/admin/demandes', badge: demandesCount },
+    { label: 'Paramètres',      href: '/admin/parametres' },
   ];
 
   if (!user) return null;
@@ -69,16 +75,25 @@ export default function AdminLayout({ children }) {
           </div>
         </div>
         <nav style={{ flex: 1, padding: '8px 0' }}>
-          {navItems.map(item => (
-            <a key={item.href} href={item.href} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 18px', fontSize: '12px', color: 'rgba(255,255,255,.5)', textDecoration: 'none' }}>
-              <span>{item.label}</span>
-              {item.badge > 0 && (
-                <span style={{ background: '#C02B2B', color: '#fff', borderRadius: '20px', fontSize: '10px', fontWeight: '700', padding: '1px 7px' }}>
-                  {item.badge}
-                </span>
-              )}
-            </a>
-          ))}
+          {navItems.map(item => {
+            const isActive = pathname === item.href;
+            return (
+              <a key={item.href} href={item.href} style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '8px 18px', fontSize: '12px', textDecoration: 'none',
+                color: isActive ? '#fff' : 'rgba(255,255,255,.5)',
+                background: isActive ? 'rgba(255,255,255,.08)' : 'transparent',
+                borderLeft: isActive ? '2px solid #2B5CE6' : '2px solid transparent',
+              }}>
+                <span>{item.label}</span>
+                {item.badge > 0 && (
+                  <span style={{ background: '#C02B2B', color: '#fff', borderRadius: '20px', fontSize: '10px', fontWeight: '700', padding: '1px 7px', minWidth: '18px', textAlign: 'center' }}>
+                    {item.badge}
+                  </span>
+                )}
+              </a>
+            );
+          })}
         </nav>
 
         {/* Bouton Vue client */}
