@@ -100,21 +100,39 @@ export default function BornesClientPage() {
           const st = statutStyle(c.statut);
           return (
             <div key={c.id} style={{ background: '#fff', border: '1px solid #E4E2DC', borderRadius: '10px', overflow: 'hidden' }}>
-              <div style={{
-                height: borne.orient === 'Portrait' ? '150px' : '90px',
-                background: 'linear-gradient(135deg, #1a3a5c, #2d7a4f)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}>
-                <div style={{ fontSize: '12px', fontWeight: '700', color: '#fff', textAlign: 'center', padding: '10px' }}>{c.nom}</div>
-              </div>
-              <div style={{ padding: '9px 12px', borderTop: '1px solid #E4E2DC' }}>
-                <div style={{ fontSize: '12px', fontWeight: '500', color: '#1A1916', marginBottom: '3px' }}>{c.nom}</div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <span style={{ fontSize: '10px', color: '#A8A69F' }}>{c.type}</span>
-                  <span style={{ fontSize: '9px', fontWeight: '600', padding: '2px 8px', borderRadius: '20px', background: st.bg, color: st.color }}>{c.statut}</span>
-                </div>
-              </div>
-            </div>
+  <div style={{
+    height: borne.orient === 'Portrait' ? '150px' : '90px',
+    background: 'linear-gradient(135deg, #1a3a5c, #2d7a4f)',
+    position: 'relative',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    cursor: 'pointer',
+  }}
+    onMouseEnter={e => e.currentTarget.querySelector('.overlay').style.opacity = 1}
+    onMouseLeave={e => e.currentTarget.querySelector('.overlay').style.opacity = 0}
+  >
+    <div style={{ fontSize: '12px', fontWeight: '700', color: '#fff', textAlign: 'center', padding: '10px' }}>{c.nom}</div>
+    <div className="overlay" style={{
+      position: 'absolute', inset: 0, background: 'rgba(0,0,0,.5)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      opacity: 0, transition: 'opacity .15s',
+    }}>
+      <button
+        onClick={() => handleDelete(c)}
+        disabled={deleting === c.id}
+        style={{ padding: '6px 14px', background: '#FCEAEA', color: '#C02B2B', border: 'none', borderRadius: '6px', fontSize: '11px', cursor: 'pointer', fontFamily: 'inherit', fontWeight: '500' }}
+      >
+        {deleting === c.id ? '⏳ Suppression…' : '🗑️ Supprimer'}
+      </button>
+    </div>
+  </div>
+  <div style={{ padding: '9px 12px', borderTop: '1px solid #E4E2DC' }}>
+    <div style={{ fontSize: '12px', fontWeight: '500', color: '#1A1916', marginBottom: '3px' }}>{c.nom}</div>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <span style={{ fontSize: '10px', color: '#A8A69F' }}>{c.type}</span>
+      <span style={{ fontSize: '9px', fontWeight: '600', padding: '2px 8px', borderRadius: '20px', background: st.bg, color: st.color }}>{c.statut}</span>
+    </div>
+  </div>
+</div>
           );
         })}
 
