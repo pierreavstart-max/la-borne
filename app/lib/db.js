@@ -111,7 +111,8 @@ export async function addNotification(data) {
 }
 
 export async function getDemandesArchivees() {
-  const q = query(collection(db, 'demandes'), where('archived', '==', true));
-  const snap = await getDocs(q);
-  return snap.docs.map(d => ({id: d.id, ...d.data()}));
+  const snap = await getDocs(collection(db, 'demandes'));
+  return snap.docs
+    .map(d => ({id: d.id, ...d.data()}))
+    .filter(d => d.archived === true);
 }
