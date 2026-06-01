@@ -1,24 +1,28 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { getClients, getBornes, getDemandes } from '../../lib/db';
+import { getClients, getBornes, getDemandes, getDemandesArchivees, updateDemande } from '../../lib/db';
 
 export default function CommunicationsPage() {
   const [clients, setClients] = useState([]);
   const [bornes, setBornes] = useState([]);
   const [demandes, setDemandes] = useState([]);
+  const [aSupprimer, setASupprimer] = useState([]);
   const [selectedClient, setSelectedClient] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function load() {
-      const [c, b, d] = await Promise.all([
+      const [c, b, d, arch] = await Promise.all([
         getClients(),
         getBornes(),
         getDemandes(),
+        getDemandesArchivees(),
       ]);
       setClients(c);
       setBornes(b);
       setDemandes(d);
+      // Assets à supprimer = demandes archivées par le client avec un ibAssetId
+      setASupprimer(arch.filter(d => d.ibAssetId && d.supprimerIb !== true));
       setLoading(false);
     }
     load();
@@ -29,7 +33,12 @@ export default function CommunicationsPage() {
   }
 
   function getDemandesApprouveesForClient(clientEmail) {
-    return demandes.filter(d => d.clientEmail === clientEmail && d.statut === 'Approuvée');
+    return demandes.filter(d => d.clientEmail === clientEmail && d.statut === 'Approuv\u00e9e' && !d.archived);
+  }
+
+  async function marquerSupprime(demande) {
+    await updateDemande(demande.id, { supprimerIb: true });
+    setASupprimer(prev => prev.filter(d => d.id !== demande.id));
   }
 
   if (loading) return (
@@ -84,11 +93,11 @@ export default function CommunicationsPage() {
         {/* Détail */}
         <div>
           {!selectedClient ? (
-            <div style={{ background: '#fff', border: '1px solid #E4E2DC', borderRadius: '10px', padding: '60px', textAlign: 'center', color: '#A8A69F', fontSize: '12px' }}>
+            <div style={{ background: '#fff', border: '1px solid #E4E2DC', borderRadius: '10px', padding: '60px', textAlign: 'center', color: '#A8A69F', fontSize: '12px', marginBottom: '14px' }}>
               ← Sélectionnez un client
             </div>
           ) : (
-            <div>
+            <div style={{ marginBottom: '14px' }}>
               {/* Header client */}
               <div style={{ background: '#fff', border: '1px solid #E4E2DC', borderRadius: '10px', padding: '14px 16px', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '12px' }}>
                 <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: '#E1F5EE', color: '#085041', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: '700' }}>
@@ -120,21 +129,20 @@ export default function CommunicationsPage() {
               {/* Communications approuvées */}
               <div style={{ background: '#fff', border: '1px solid #E4E2DC', borderRadius: '10px', overflow: 'hidden' }}>
                 <div style={{ padding: '14px 16px', borderBottom: '1px solid #E4E2DC', fontSize: '13px', fontWeight: '600', color: '#1A1916', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <span>Communications approuvées</span>
+                  <span>Communications approuv\u00e9es</span>
                   <span style={{ fontSize: '11px', color: '#A8A69F', fontWeight: '400' }}>
                     {getDemandesApprouveesForClient(selectedClient.email).length} communication{getDemandesApprouveesForClient(selectedClient.email).length > 1 ? 's' : ''}
                   </span>
                 </div>
-
                 {getDemandesApprouveesForClient(selectedClient.email).length === 0 ? (
                   <div style={{ padding: '40px', textAlign: 'center', color: '#A8A69F', fontSize: '12px', fontStyle: 'italic' }}>
-                    Aucune communication approuvée pour ce client
+                    Aucune communication approuv\u00e9e
                   </div>
                 ) : (
                   <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                     <thead>
                       <tr style={{ background: '#F7F6F3' }}>
-                        {['Nom', 'Type', 'Date d\'approbation', 'Statut info-beamer'].map(h => (
+                        {['Nom', 'Type', 'Date', 'Statut info-beamer'].map(h => (
                           <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: '10px', color: '#A8A69F', textTransform: 'uppercase', letterSpacing: '.05em', fontWeight: '600', borderBottom: '1px solid #E4E2DC' }}>{h}</th>
                         ))}
                       </tr>
@@ -154,7 +162,7 @@ export default function CommunicationsPage() {
                           </td>
                           <td style={{ padding: '11px 12px' }}>
                             <span style={{ fontSize: '10px', fontWeight: '600', padding: '2px 8px', borderRadius: '20px', background: '#FDF3E3', color: '#9A5E0A' }}>
-                              À créer sur info-beamer
+                              {d.ibAssetId ? `Asset #${d.ibAssetId}` : 'À cr\u00e9er sur info-beamer'}
                             </span>
                           </td>
                         </tr>
@@ -163,6 +171,47 @@ export default function CommunicationsPage() {
                   </table>
                 )}
               </div>
+            </div>
+          )}
+
+          {/* Assets à supprimer */}
+          {aSupprimer.length > 0 && (
+            <div style={{ background: '#fff', border: '1px solid #EABABA', borderRadius: '10px', overflow: 'hidden' }}>
+              <div style={{ padding: '14px 16px', borderBottom: '1px solid #EABABA', fontSize: '13px', fontWeight: '600', color: '#C02B2B', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                🗑️ Assets à supprimer sur info-beamer
+                <span style={{ fontSize: '10px', fontWeight: '600', padding: '2px 7px', borderRadius: '20px', background: '#FCEAEA', color: '#C02B2B' }}>{aSupprimer.length}</span>
+              </div>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ background: '#FFF5F5' }}>
+                    {['Client', 'Communication', 'Asset ID', 'Action'].map(h => (
+                      <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: '10px', color: '#A8A69F', textTransform: 'uppercase', letterSpacing: '.05em', fontWeight: '600', borderBottom: '1px solid #EABABA' }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {aSupprimer.map(d => (
+                    <tr key={d.id} style={{ borderBottom: '1px solid #FCEAEA' }}>
+                      <td style={{ padding: '11px 12px', fontSize: '12px', color: '#1A1916' }}>{d.clientNom || d.clientEmail}</td>
+                      <td style={{ padding: '11px 12px', fontWeight: '500', fontSize: '13px', color: '#1A1916' }}>{d.nom}</td>
+                      <td style={{ padding: '11px 12px' }}>
+                        <a href={`https://info-beamer.com/hosted/asset/${d.ibAssetId}`} target="_blank" rel="noreferrer"
+                          style={{ fontSize: '10px', fontFamily: 'monospace', background: '#FCEAEA', border: '1px solid #EABABA', padding: '2px 7px', borderRadius: '4px', color: '#C02B2B', textDecoration: 'none' }}>
+                          #{d.ibAssetId}
+                        </a>
+                      </td>
+                      <td style={{ padding: '11px 12px' }}>
+                        <button
+                          onClick={() => marquerSupprime(d)}
+                          style={{ padding: '3px 10px', background: '#E6F5ED', color: '#18865A', border: '1px solid #AADBC5', borderRadius: '6px', fontSize: '11px', cursor: 'pointer', fontFamily: 'inherit', fontWeight: '500' }}
+                        >
+                          ✓ Supprim\u00e9 sur info-beamer
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
         </div>
