@@ -43,6 +43,7 @@ export default function BornesClientPage() {
         });
       }
       await updateDemande(demande.id, { archived: true });
+      console.log('updateDemande appelé avec:', demande.id, { archived: true });
       const email = localStorage.getItem('clientEmail');
       const clientDemandes = await getDemandesClient(email);
       setDemandes(clientDemandes);
