@@ -60,8 +60,9 @@ export default function DemandesPage() {
         const genData = await genRes.json();
 console.log('Réponse génération:', genData);
 const assetId = genData.assetId || genData.asset_id;
+const assetFilename = genData.filename;
 if (assetId) {
-  await updateDemande(demande.id, { ibAssetId: assetId });
+  await updateDemande(demande.id, { ibAssetId: assetId, ibFilename: assetFilename });
 }
       } catch (err) {
         console.error('Erreur génération image:', err);

@@ -166,7 +166,11 @@ export async function POST(request) {
       return NextResponse.json({ error: ibData.error || 'Upload échoué' }, { status: 400 });
     }
 
-    return NextResponse.json({ success: true, assetId: ibData.asset_id });
+    return NextResponse.json({ 
+  success: true, 
+  assetId: ibData.asset_id,
+  filename: ibData.info?.filename || filename + (isVideo ? '.mp4' : '.png')
+});
 
   } catch (error) {
     console.error('Erreur generate-communication:', error);

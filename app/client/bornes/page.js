@@ -55,38 +55,36 @@ export default function BornesClientPage() {
   }
 
   async function handleUpload(demande, file) {
-    setUploading(demande.id);
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-      if (demande.ibAssetId) {
-        formData.append('assetId', demande.ibAssetId);
-      }
+  setUploading(demande.id);
+  try {
+    // Renomme le fichier avec le nom original de l'asset info-beamer
+    const originalFilename = demande.ibFilename || file.name;
+    const renamedFile = new File([file], originalFilename, { type: file.type });
 
-      const res = await fetch('/api/infobeamer/upload-asset', {
-        method: 'POST',
-        body: formData,
-      });
-      const data = await res.json();
+    const formData = new FormData();
+    formData.append('file', renamedFile);
 
-      if (data.success) {
-        // Met à jour ibAssetId si c'était un nouvel asset
-        if (!demande.ibAssetId && data.assetId) {
-          await updateDemande(demande.id, { ibAssetId: data.assetId });
-        }
-        alert('Communication mise à jour sur info-beamer !');
-        const email = localStorage.getItem('clientEmail');
-        const clientDemandes = await getDemandesClient(email);
-        setDemandes(clientDemandes);
-      } else {
-        alert('Erreur : ' + data.error);
-      }
-    } catch (err) {
-      alert('Erreur lors de l\'upload.');
+    const res = await fetch('/api/infobeamer/upload-asset', {
+      method: 'POST',
+      body: formData,
+    });
+    const data = await res.json();
+
+    if (data.success) {
+      await updateDemande(demande.id, { ibAssetId: data.assetId });
+      alert('Communication mise à jour sur info-beamer !');
+      const email = localStorage.getItem('clientEmail');
+      const clientDemandes = await getDemandesClient(email);
+      setDemandes(clientDemandes);
+    } else {
+      alert('Erreur : ' + data.error);
     }
-    setUploading(null);
-    setEditingComm(null);
+  } catch (err) {
+    alert('Erreur lors de l\'upload.');
   }
+  setUploading(null);
+  setEditingComm(null);
+}
 
   if (loading) return (
     <div style={{ padding: '40px', textAlign: 'center', color: '#A8A69F', fontSize: '12px' }}>
