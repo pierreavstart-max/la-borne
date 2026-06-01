@@ -211,24 +211,28 @@ export default function BornesClientPage() {
 
               {/* Formulaire upload */}
               {isEditing && (
-                <div style={{ padding: '10px 12px', borderTop: '1px solid #E4E2DC', background: '#F7F6F3' }}>
-                  <div style={{ fontSize: '10px', color: '#6B6860', marginBottom: '6px' }}>
-                    Uploader un nouveau fichier ({c.type === 'Vidéo' ? 'MP4' : 'JPG/PNG'}) :
-                  </div>
-                  <input
-                    type="file"
-                    accept={c.type === 'Vidéo' ? 'video/mp4' : 'image/jpeg,image/png'}
-                    onChange={e => {
-                      const file = e.target.files[0];
-                      if (file) handleUpload(c, file);
-                    }}
-                    style={{ fontSize: '11px', color: '#1A1916', width: '100%' }}
-                  />
-                  {uploading === c.id && (
-                    <div style={{ fontSize: '11px', color: '#2B5CE6', marginTop: '6px' }}>⏳ Upload en cours…</div>
-                  )}
-                </div>
-              )}
+  <div style={{ padding: '10px 12px', borderTop: '1px solid #E4E2DC', background: '#F7F6F3' }}>
+    <div style={{ fontSize: '10px', color: '#6B6860', marginBottom: '8px' }}>
+      Remplacer par un nouveau fichier ({c.type === 'Vidéo' ? 'MP4' : 'JPG / PNG'}) :
+    </div>
+    <label style={{
+      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+      padding: '8px 14px', background: '#2B5CE6', color: '#fff',
+      borderRadius: '6px', fontSize: '12px', fontWeight: '500', cursor: 'pointer',
+    }}>
+      {uploading === c.id ? '⏳ Upload en cours…' : '📁 Choisir un fichier'}
+      <input
+        type="file"
+        accept={c.type === 'Vidéo' ? 'video/mp4' : 'image/jpeg,image/png'}
+        style={{ display: 'none' }}
+        onChange={e => {
+          const file = e.target.files[0];
+          if (file) handleUpload(c, file);
+        }}
+      />
+    </label>
+  </div>
+)}
 
               {/* Footer */}
               <div style={{ padding: '9px 12px', borderTop: '1px solid #E4E2DC' }}>
