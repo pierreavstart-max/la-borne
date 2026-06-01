@@ -169,7 +169,7 @@ export async function POST(request) {
     return NextResponse.json({ 
   success: true, 
   assetId: ibData.asset_id,
-  filename: ibData.info?.filename || filename + (isVideo ? '.mp4' : '.png')
+  filename: ibData.info?.filename || filename + (isVideo ? '.mp4' : '.png'),
   thumb: ibData.info?.thumb || null,
 });
 
