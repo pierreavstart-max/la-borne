@@ -44,6 +44,7 @@ export default function ClientLayout({ children }) {
     { label: 'Ma bibliothèque', href: '/client/bibliotheque' },
     { label: 'Mes demandes',    href: '/client/demandes' },
     { label: 'Mon profil',      href: '/client/profil' },
+    { label: 'Éditeur', href: '/client/editeur' },
   ];
 
   return (
