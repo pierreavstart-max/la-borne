@@ -58,7 +58,11 @@ export default function DemandesPage() {
           }),
         });
         const genData = await genRes.json();
-        console.log('Réponse génération:', genData);
+console.log('Réponse génération:', genData);
+const assetId = genData.assetId || genData.asset_id;
+if (assetId) {
+  await updateDemande(demande.id, { ibAssetId: assetId });
+}
       } catch (err) {
         console.error('Erreur génération image:', err);
       }
