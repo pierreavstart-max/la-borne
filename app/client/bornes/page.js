@@ -193,9 +193,9 @@ export default function BornesClientPage() {
       style={{ 
         width: '100%', 
         height: '100%', 
-        objectFit: 'cover',
-        // Pour portrait : affiche en mode portrait dans la preview
-        transform: borne.orient === 'Portrait' ? 'rotate(-90deg) scale(1.8)' : 'none',
+        objectFit: 'contain',
+    background: '#000',
+    transform: 'none',
       }} 
     />
   ) : (
