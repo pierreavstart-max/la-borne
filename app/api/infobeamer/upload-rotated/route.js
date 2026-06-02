@@ -13,32 +13,28 @@ export async function POST(request) {
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
-
     let uploadBuffer = buffer;
-    let uploadMimetype = 'image/png';
 
     if (orientation === 'portrait' && file.type.startsWith('image/')) {
-      // Charge l'image et la pivote 90° sens horaire
+      // L'image est en 1080x1920 (portrait)
+      // On la pivote 90° sens horaire pour obtenir 1920x1080
       const img = await loadImage(buffer);
-      const srcW = img.width;
-      const srcH = img.height;
-
-      // Canvas final 1920x1080
+      
       const canvas = createCanvas(1920, 1080);
       const ctx = canvas.getContext('2d');
 
-      // Pivot 90° sens horaire
+      ctx.save();
       ctx.translate(1920, 0);
       ctx.rotate(Math.PI / 2);
-      ctx.drawImage(img, 0, 0, srcW, srcH, 0, 0, srcH, srcW);
+      ctx.drawImage(img, 0, 0, 1080, 1920);
+      ctx.restore();
 
       uploadBuffer = canvas.toBuffer('image/png');
     }
 
-    // Upload sur info-beamer avec le nom original
     const uploadFilename = filename || file.name;
     const form = new global.FormData();
-    const blob = new global.Blob([uploadBuffer], { type: uploadMimetype });
+    const blob = new global.Blob([uploadBuffer], { type: 'image/png' });
     form.append('file', blob, uploadFilename);
 
     const response = await fetch('https://info-beamer.com/api/v1/asset/upload', {
@@ -55,8 +51,8 @@ export async function POST(request) {
       return NextResponse.json({ error: data.error || 'Upload échoué' }, { status: 400 });
     }
 
-    return NextResponse.json({ 
-      success: true, 
+    return NextResponse.json({
+      success: true,
       assetId: data.asset_id,
       thumb: data.info?.thumb || null,
     });

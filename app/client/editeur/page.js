@@ -147,78 +147,81 @@ export default function EditeurPage() {
   }
 
   async function handlePublish() {
-    if (!selectedDemande) return;
-    setPublishing(true);
-    try {
-      const preview = previewRef.current;
-      if (!preview) return;
+  if (!selectedDemande) return;
+  setPublishing(true);
+  try {
+    const preview = previewRef.current;
+    if (!preview) return;
 
-      const W = isPortrait ? 1080 : 1920;
-      const H = isPortrait ? 1920 : 1080;
-      const canvas = document.createElement('canvas');
-      canvas.width = W;
-      canvas.height = H;
-      const ctx = canvas.getContext('2d');
+    // Pour portrait : canvas en 1080x1920, puis on pivote lors de l'upload
+    // Pour paysage : canvas en 1920x1080 direct
+    const W = isPortrait ? 1080 : 1920;
+    const H = isPortrait ? 1920 : 1080;
 
-      const scaleX = W / preview.offsetWidth;
-      const scaleY = H / preview.offsetHeight;
+    const canvas = document.createElement('canvas');
+    canvas.width = W;
+    canvas.height = H;
+    const ctx = canvas.getContext('2d');
 
-      // Fond
-      if (bgImage) {
-        const img = new Image();
-        img.src = bgImage;
-        await new Promise(r => { img.onload = r; });
-        ctx.drawImage(img, 0, 0, W, H);
-      } else {
-        ctx.fillStyle = bgColor;
-        ctx.fillRect(0, 0, W, H);
-      }
+    const scaleX = W / preview.offsetWidth;
+    const scaleY = H / preview.offsetHeight;
 
-      // Éléments
-      for (const el of elements) {
-        if (el.type === 'text') {
-          ctx.fillStyle = el.color;
-          const weight = el.bold ? 'bold ' : '';
-          const style = el.italic ? 'italic ' : '';
-          ctx.font = `${style}${weight}${Math.round(el.fontSize * scaleY)}px ${el.fontFamily}`;
-          ctx.fillText(el.text, Math.round(el.x * scaleX), Math.round(el.y * scaleY + el.fontSize * scaleY));
-        } else if (el.type === 'image') {
-          const img = new Image();
-          img.src = el.src;
-          await new Promise(r => { img.onload = r; });
-          ctx.drawImage(img, Math.round(el.x * scaleX), Math.round(el.y * scaleY), Math.round(el.width * scaleX), Math.round(el.height * scaleY));
-        }
-      }
-
-      const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
-      const filename = selectedDemande.ibFilename || selectedDemande.nom.toLowerCase().replace(/\s+/g, '-') + '.png';
-
-      const formData = new FormData();
-      formData.append('file', blob, filename);
-      formData.append('orientation', isPortrait ? 'portrait' : 'paysage');
-      formData.append('filename', filename);
-
-      const res = await fetch('/api/infobeamer/upload-rotated', {
-        method: 'POST',
-        body: formData,
-      });
-      const data = await res.json();
-
-      if (data.success) {
-        await updateDemande(selectedDemande.id, {
-          ibAssetId: data.assetId,
-          ibThumb: data.thumb || null,
-          editeurState: JSON.stringify({ bgColor, bgImage, elements }),
-        });
-        alert('Votre communication est publiée !');
-      } else {
-        alert('Erreur : ' + data.error);
-      }
-    } catch (err) {
-      alert('Erreur lors de la publication.');
+    // Fond
+    if (bgImage) {
+      const img = new Image();
+      img.src = bgImage;
+      await new Promise(r => { img.onload = r; });
+      ctx.drawImage(img, 0, 0, W, H);
+    } else {
+      ctx.fillStyle = bgColor;
+      ctx.fillRect(0, 0, W, H);
     }
-    setPublishing(false);
+
+    // Éléments
+    for (const el of elements) {
+      if (el.type === 'text') {
+        ctx.fillStyle = el.color;
+        const weight = el.bold ? 'bold ' : '';
+        const style = el.italic ? 'italic ' : '';
+        ctx.font = `${style}${weight}${Math.round(el.fontSize * scaleY)}px ${el.fontFamily}`;
+        ctx.fillText(el.text, Math.round(el.x * scaleX), Math.round(el.y * scaleY + el.fontSize * scaleY));
+      } else if (el.type === 'image') {
+        const img = new Image();
+        img.src = el.src;
+        await new Promise(r => { img.onload = r; });
+        ctx.drawImage(img, Math.round(el.x * scaleX), Math.round(el.y * scaleY), Math.round(el.width * scaleX), Math.round(el.height * scaleY));
+      }
+    }
+
+    const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
+    const filename = selectedDemande.ibFilename || selectedDemande.nom.toLowerCase().replace(/\s+/g, '-') + '.png';
+
+    const formData = new FormData();
+    formData.append('file', blob, filename);
+    formData.append('orientation', isPortrait ? 'portrait' : 'paysage');
+    formData.append('filename', filename);
+
+    const res = await fetch('/api/infobeamer/upload-rotated', {
+      method: 'POST',
+      body: formData,
+    });
+    const data = await res.json();
+
+    if (data.success) {
+      await updateDemande(selectedDemande.id, {
+        ibAssetId: data.assetId,
+        ibThumb: data.thumb || null,
+        editeurState: JSON.stringify({ bgColor, bgImage, elements }),
+      });
+      alert('Votre communication est publiée !');
+    } else {
+      alert('Erreur : ' + data.error);
+    }
+  } catch (err) {
+    alert('Erreur lors de la publication.');
   }
+  setPublishing(false);
+}
 
   const selectedElement = elements.find(el => el.id === selectedEl);
   const previewW = isPortrait ? 200 : 356;
