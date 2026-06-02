@@ -115,27 +115,27 @@ export default function EditeurPage() {
   }
 
   function onMouseDown(e, id) {
-    e.stopPropagation();
-    e.preventDefault();
-    setSelectedEl(id);
-    const startX = e.clientX;
-    const startY = e.clientY;
-    const el = elements.find(el => el.id === id);
-    const origX = el.x;
-    const origY = el.y;
+  e.stopPropagation();
+  e.preventDefault();
+  setSelectedEl(id);
+  const startX = e.clientX;
+  const startY = e.clientY;
+  const el = elements.find(el => el.id === id);
+  const origX = el.x;
+  const origY = el.y;
 
-    function onMove(ev) {
-      const dx = ev.clientX - startX;
-      const dy = ev.clientY - startY;
-      setElements(prev => prev.map(e2 => e2.id === id ? { ...e2, x: origX + dx, y: origY + dy } : e2));
-    }
-    function onUp() {
-      window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('mouseup', onUp);
-    }
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
+  function onMove(ev) {
+    const dx = (ev.clientX - startX) / 0.5;
+    const dy = (ev.clientY - startY) / 0.5;
+    setElements(prev => prev.map(e2 => e2.id === id ? { ...e2, x: origX + dx, y: origY + dy } : e2));
   }
+  function onUp() {
+    window.removeEventListener('mousemove', onMove);
+    window.removeEventListener('mouseup', onUp);
+  }
+  window.addEventListener('mousemove', onMove);
+  window.addEventListener('mouseup', onUp);
+}
 
   async function handleSave() {
     if (!selectedDemande) return;
@@ -315,66 +315,74 @@ const previewH = canvasH;
       ← Sélectionnez une communication pour commencer
     </div>
   ) : (
-    <div
-      ref={previewRef}
-      style={{
-        width: `${previewW}px`,
-        height: `${previewH}px`,
-        background: bgImage ? `url(${bgImage}) center/cover no-repeat` : bgColor,
-        position: 'relative',
-        overflow: 'hidden',
-        boxShadow: '0 4px 24px rgba(0,0,0,.2)',
-        borderRadius: '3px',
-        flexShrink: 0,
-      }}
-      onClick={() => setSelectedEl(null)}
-    >
-      {elements.map(el => (
-        <div
-          key={el.id}
-          onMouseDown={e => onMouseDown(e, el.id)}
-          onClick={e => { e.stopPropagation(); setSelectedEl(el.id); }}
-          style={{
-            position: 'absolute',
-            left: `${el.x}px`,
-            top: `${el.y}px`,
-            cursor: 'move',
-            userSelect: 'none',
-            outline: selectedEl === el.id ? '2px dashed #2B5CE6' : '1px dashed transparent',
-            padding: '2px',
-            boxSizing: 'border-box',
-          }}
-        >
-          {el.type === 'text' ? (
-            <span style={{
-              fontSize: `${el.fontSize}px`,
-              fontFamily: el.fontFamily,
-              color: el.color,
-              fontWeight: el.bold ? 'bold' : 'normal',
-              fontStyle: el.italic ? 'italic' : 'normal',
-              whiteSpace: 'pre-wrap',
-              display: 'block',
-            }}>
-              {el.text}
-            </span>
-          ) : (
-            <img
-              src={el.src}
-              alt=""
-              style={{
-                width: `${el.width}px`,
-                height: `${el.height}px`,
+    <div style={{
+      width: `${previewW * 0.5}px`,
+      height: `${previewH * 0.5}px`,
+      flexShrink: 0,
+      position: 'relative',
+    }}>
+      <div
+        ref={previewRef}
+        style={{
+          width: `${previewW}px`,
+          height: `${previewH}px`,
+          background: bgImage ? `url(${bgImage}) center/cover no-repeat` : bgColor,
+          position: 'absolute',
+          top: 0, left: 0,
+          transform: 'scale(0.5)',
+          transformOrigin: 'top left',
+          overflow: 'hidden',
+          boxShadow: '0 4px 24px rgba(0,0,0,.2)',
+          borderRadius: '3px',
+        }}
+        onClick={() => setSelectedEl(null)}
+      >
+        {elements.map(el => (
+          <div
+            key={el.id}
+            onMouseDown={e => onMouseDown(e, el.id)}
+            onClick={e => { e.stopPropagation(); setSelectedEl(el.id); }}
+            style={{
+              position: 'absolute',
+              left: `${el.x}px`,
+              top: `${el.y}px`,
+              cursor: 'move',
+              userSelect: 'none',
+              outline: selectedEl === el.id ? '2px dashed #2B5CE6' : '1px dashed transparent',
+              padding: '2px',
+              boxSizing: 'border-box',
+            }}
+          >
+            {el.type === 'text' ? (
+              <span style={{
+                fontSize: `${el.fontSize}px`,
+                fontFamily: el.fontFamily,
+                color: el.color,
+                fontWeight: el.bold ? 'bold' : 'normal',
+                fontStyle: el.italic ? 'italic' : 'normal',
+                whiteSpace: 'pre-wrap',
                 display: 'block',
-                pointerEvents: 'none',
-              }}
-            />
-          )}
-        </div>
-      ))}
+              }}>
+                {el.text}
+              </span>
+            ) : (
+              <img
+                src={el.src}
+                alt=""
+                style={{
+                  width: `${el.width}px`,
+                  height: `${el.height}px`,
+                  display: 'block',
+                  pointerEvents: 'none',
+                }}
+              />
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   )}
 </div>
-      </div>
 
       {/* Panneau droit — propriétés */}
       <div style={{ background: '#fff', border: '1px solid #E4E2DC', borderRadius: '10px', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
