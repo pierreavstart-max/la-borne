@@ -178,20 +178,32 @@ export default function EditeurPage() {
     }
 
     // Éléments
-    for (const el of elements) {
-      if (el.type === 'text') {
-        ctx.fillStyle = el.color;
-        const weight = el.bold ? 'bold ' : '';
-        const style = el.italic ? 'italic ' : '';
-        ctx.font = `${style}${weight}${Math.round(el.fontSize * scaleY)}px ${el.fontFamily}`;
-        ctx.fillText(el.text, Math.round(el.x * scaleX), Math.round(el.y * scaleY + el.fontSize * scaleY));
-      } else if (el.type === 'image') {
-        const img = new Image();
-        img.src = el.src;
-        await new Promise(r => { img.onload = r; });
-        ctx.drawImage(img, Math.round(el.x * scaleX), Math.round(el.y * scaleY), Math.round(el.width * scaleX), Math.round(el.height * scaleY));
-      }
-    }
+for (const el of elements) {
+  if (el.type === 'text') {
+    ctx.fillStyle = el.color;
+    const weight = el.bold ? 'bold ' : '';
+    const style = el.italic ? 'italic ' : '';
+    // fontSize est en "unités preview" — on le met à l'échelle
+    const scaledFontSize = Math.round(el.fontSize * scaleY);
+    ctx.font = `${style}${weight}${scaledFontSize}px ${el.fontFamily}`;
+    ctx.fillText(
+      el.text,
+      Math.round(el.x * scaleX),
+      Math.round(el.y * scaleY) + scaledFontSize
+    );
+  } else if (el.type === 'image') {
+    const img = new Image();
+    img.src = el.src;
+    await new Promise(r => { img.onload = r; });
+    ctx.drawImage(
+      img,
+      Math.round(el.x * scaleX),
+      Math.round(el.y * scaleY),
+      Math.round(el.width * scaleX),
+      Math.round(el.height * scaleY)
+    );
+  }
+}
 
     const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
     const filename = selectedDemande.ibFilename || selectedDemande.nom.toLowerCase().replace(/\s+/g, '-') + '.png';
