@@ -155,8 +155,8 @@ export default function EditeurPage() {
 
     // Pour portrait : canvas en 1080x1920, puis on pivote lors de l'upload
     // Pour paysage : canvas en 1920x1080 direct
-    const W = isPortrait ? 1080 : 1920;
-    const H = isPortrait ? 1920 : 1080;
+    const W = canvasW;
+    const H = canvasH;
 
     const canvas = document.createElement('canvas');
     canvas.width = W;
@@ -238,6 +238,8 @@ for (const el of elements) {
   const selectedElement = elements.find(el => el.id === selectedEl);
   const previewW = isPortrait ? 200 : 356;
   const previewH = isPortrait ? 356 : 200;
+  const canvasW = isPortrait ? 1080 : 1920;
+  const canvasH = isPortrait ? 1920 : 1080;
 
   if (loading) return <div style={{ padding: '40px', textAlign: 'center', color: '#A8A69F', fontSize: '12px' }}>Chargement…</div>;
 
@@ -351,7 +353,7 @@ for (const el of elements) {
                 >
                   {el.type === 'text' ? (
                     <span style={{
-                      fontSize: `${Math.round(el.fontSize / (isPortrait ? 9.6 : 5.4))}px`,
+                      fontSize: `${Math.round(el.fontSize * previewH / canvasH)}px`,
                       fontFamily: el.fontFamily,
                       color: el.color,
                       fontWeight: el.bold ? 'bold' : 'normal',
