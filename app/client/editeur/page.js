@@ -4,6 +4,7 @@ import { getDemandesClient, getBornes, updateDemande } from '../../lib/db';
 
 const FONTS = ['Arial', 'Georgia', 'Verdana', 'Courier New', 'Impact', 'Trebuchet MS'];
 const COLORS = ['#ffffff', '#000000', '#2E8FA3', '#2B5CE6', '#1D9E75', '#C02B2B', '#9A5E0A', '#5B3DB8'];
+const SCALE = 0.5;
 
 export default function EditeurPage() {
   const [demandes, setDemandes] = useState([]);
@@ -12,12 +13,10 @@ export default function EditeurPage() {
   const [loading, setLoading] = useState(true);
   const [publishing, setPublishing] = useState(false);
   const [saving, setSaving] = useState(false);
-
   const [bgColor, setBgColor] = useState('#2E8FA3');
   const [bgImage, setBgImage] = useState(null);
   const [elements, setElements] = useState([]);
   const [selectedEl, setSelectedEl] = useState(null);
-
   const previewRef = useRef(null);
 
   useEffect(() => {
@@ -42,7 +41,6 @@ export default function EditeurPage() {
   function selectDemande(d) {
     setSelectedDemande(d);
     setSelectedEl(null);
-    // Charge l'état sauvegardé si existant
     if (d.editeurState) {
       const state = JSON.parse(d.editeurState);
       setBgColor(state.bgColor || '#2E8FA3');
@@ -60,8 +58,8 @@ export default function EditeurPage() {
       id: Date.now(),
       type: 'text',
       text: 'Votre texte',
-      x: 40, y: 40,
-      fontSize: 48,
+      x: 100, y: 100,
+      fontSize: 80,
       fontFamily: 'Arial',
       color: '#ffffff',
       bold: false,
@@ -95,14 +93,13 @@ export default function EditeurPage() {
     reader.onload = ev => {
       const img = new Image();
       img.onload = () => {
-        // Calcule la taille proportionnelle pour la preview
-       const maxW = canvasW * 0.5;
-       const ratio = Math.min(maxW / img.width, maxW / img.height);
+        const maxW = (isPortrait ? 1080 : 1920) * 0.4;
+        const ratio = Math.min(maxW / img.width, maxW / img.height);
         const el = {
           id: Date.now(),
           type: 'image',
           src: ev.target.result,
-          x: 40, y: 40,
+          x: 100, y: 100,
           width: Math.round(img.width * ratio),
           height: Math.round(img.height * ratio),
         };
@@ -115,27 +112,26 @@ export default function EditeurPage() {
   }
 
   function onMouseDown(e, id) {
-  e.stopPropagation();
-  e.preventDefault();
-  setSelectedEl(id);
-  const startX = e.clientX;
-  const startY = e.clientY;
-  const el = elements.find(el => el.id === id);
-  const origX = el.x;
-  const origY = el.y;
-
-  function onMove(ev) {
-    const dx = (ev.clientX - startX) / 0.5;
-    const dy = (ev.clientY - startY) / 0.5;
-    setElements(prev => prev.map(e2 => e2.id === id ? { ...e2, x: origX + dx, y: origY + dy } : e2));
+    e.stopPropagation();
+    e.preventDefault();
+    setSelectedEl(id);
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const el = elements.find(el => el.id === id);
+    const origX = el.x;
+    const origY = el.y;
+    function onMove(ev) {
+      const dx = (ev.clientX - startX) / SCALE;
+      const dy = (ev.clientY - startY) / SCALE;
+      setElements(prev => prev.map(e2 => e2.id === id ? { ...e2, x: origX + dx, y: origY + dy } : e2));
+    }
+    function onUp() {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    }
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
   }
-  function onUp() {
-    window.removeEventListener('mousemove', onMove);
-    window.removeEventListener('mouseup', onUp);
-  }
-  window.addEventListener('mousemove', onMove);
-  window.addEventListener('mouseup', onUp);
-}
 
   async function handleSave() {
     if (!selectedDemande) return;
@@ -147,95 +143,80 @@ export default function EditeurPage() {
   }
 
   async function handlePublish() {
-  if (!selectedDemande) return;
-  setPublishing(true);
-  try {
-    const preview = previewRef.current;
-    if (!preview) return;
+    if (!selectedDemande) return;
+    setPublishing(true);
+    try {
+      const W = isPortrait ? 1080 : 1920;
+      const H = isPortrait ? 1920 : 1080;
+      const canvas = document.createElement('canvas');
+      canvas.width = W;
+      canvas.height = H;
+      const ctx = canvas.getContext('2d');
 
-    // Pour portrait : canvas en 1080x1920, puis on pivote lors de l'upload
-    // Pour paysage : canvas en 1920x1080 direct
-    const W = canvasW;
-    const H = canvasH;
+      if (bgImage) {
+        const img = new Image();
+        img.src = bgImage;
+        await new Promise(r => { img.onload = r; });
+        ctx.drawImage(img, 0, 0, W, H);
+      } else {
+        ctx.fillStyle = bgColor;
+        ctx.fillRect(0, 0, W, H);
+      }
 
-    const canvas = document.createElement('canvas');
-    canvas.width = W;
-    canvas.height = H;
-    const ctx = canvas.getContext('2d');
+      for (const el of elements) {
+        if (el.type === 'text') {
+          ctx.fillStyle = el.color;
+          const weight = el.bold ? 'bold ' : '';
+          const style = el.italic ? 'italic ' : '';
+          ctx.font = `${style}${weight}${el.fontSize}px ${el.fontFamily}`;
+          ctx.fillText(el.text, Math.round(el.x), Math.round(el.y + el.fontSize));
+        } else if (el.type === 'image') {
+          const img = new Image();
+          img.src = el.src;
+          await new Promise(r => { img.onload = r; });
+          ctx.drawImage(img, Math.round(el.x), Math.round(el.y), Math.round(el.width), Math.round(el.height));
+        }
+      }
 
-    const scaleX = 1;
-const scaleY = 1;
+      const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
+      const filename = selectedDemande.ibFilename || selectedDemande.nom.toLowerCase().replace(/\s+/g, '-') + '.png';
 
-    // Fond
-    if (bgImage) {
-      const img = new Image();
-      img.src = bgImage;
-      await new Promise(r => { img.onload = r; });
-      ctx.drawImage(img, 0, 0, W, H);
-    } else {
-      ctx.fillStyle = bgColor;
-      ctx.fillRect(0, 0, W, H);
-    }
+      const formData = new FormData();
+      formData.append('file', blob, filename);
+      formData.append('orientation', isPortrait ? 'portrait' : 'paysage');
+      formData.append('filename', filename);
 
-    // Éléments
-for (const el of elements) {
-  if (el.type === 'text') {
-    ctx.fillStyle = el.color;
-    const weight = el.bold ? 'bold ' : '';
-    const style = el.italic ? 'italic ' : '';
-    // fontSize est en "unités preview" — on le met à l'échelle
-    const scaledFontSize = Math.round(el.fontSize * scaleY);
-    ctx.font = `${style}${weight}${scaledFontSize}px ${el.fontFamily}`;
-    ctx.fillText(
-  el.text,
-  Math.round(el.x),
-  Math.round(el.y + el.fontSize)
-);
-  } else if (el.type === 'image') {
-    const img = new Image();
-    img.src = el.src;
-    await new Promise(r => { img.onload = r; });
-    ctx.drawImage(img, Math.round(el.x), Math.round(el.y), Math.round(el.width), Math.round(el.height));
-  }
-}
-
-    const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
-    const filename = selectedDemande.ibFilename || selectedDemande.nom.toLowerCase().replace(/\s+/g, '-') + '.png';
-
-    const formData = new FormData();
-    formData.append('file', blob, filename);
-    formData.append('orientation', isPortrait ? 'portrait' : 'paysage');
-    formData.append('filename', filename);
-
-    const res = await fetch('/api/infobeamer/upload-rotated', {
-      method: 'POST',
-      body: formData,
-    });
-    const data = await res.json();
-
-    if (data.success) {
-      await updateDemande(selectedDemande.id, {
-        ibAssetId: data.assetId,
-        ibThumb: data.thumb || null,
-        editeurState: JSON.stringify({ bgColor, bgImage, elements }),
+      const res = await fetch('/api/infobeamer/upload-rotated', {
+        method: 'POST',
+        body: formData,
       });
-      alert('Votre communication est publiée !');
-    } else {
-      alert('Erreur : ' + data.error);
+      const data = await res.json();
+
+      if (data.success) {
+        await updateDemande(selectedDemande.id, {
+          ibAssetId: data.assetId,
+          ibThumb: data.thumb || null,
+          editeurState: JSON.stringify({ bgColor, bgImage, elements }),
+        });
+        alert('Votre communication est publiée !');
+      } else {
+        alert('Erreur : ' + data.error);
+      }
+    } catch (err) {
+      alert('Erreur lors de la publication.');
     }
-  } catch (err) {
-    alert('Erreur lors de la publication.');
+    setPublishing(false);
   }
-  setPublishing(false);
-}
-const canvasW = isPortrait ? 1080 : 1920;
-const canvasH = isPortrait ? 1920 : 1080;
-const previewW = canvasW;
-const previewH = canvasH;
 
   const selectedElement = elements.find(el => el.id === selectedEl);
+  const canvasW = isPortrait ? 1080 : 1920;
+  const canvasH = isPortrait ? 1920 : 1080;
 
-  if (loading) return <div style={{ padding: '40px', textAlign: 'center', color: '#A8A69F', fontSize: '12px' }}>Chargement…</div>;
+  if (loading) return (
+    <div style={{ padding: '40px', textAlign: 'center', color: '#A8A69F', fontSize: '12px' }}>
+      Chargement…
+    </div>
+  );
 
   return (
     <div style={{ padding: '16px', display: 'grid', gridTemplateColumns: '200px 1fr 240px', gap: '12px', height: 'calc(100vh - 32px)' }}>
@@ -262,7 +243,11 @@ const previewH = canvasH;
               <div style={{ fontSize: '12px', fontWeight: '500', color: '#1A1916' }}>{d.nom}</div>
               <div style={{ fontSize: '10px', color: '#A8A69F', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}>
                 {d.type}
-                {d.editeurState && <span style={{ background: '#E6F5ED', color: '#18865A', padding: '1px 5px', borderRadius: '10px', fontSize: '9px' }}>Sauvegardé</span>}
+                {d.editeurState && (
+                  <span style={{ background: '#E6F5ED', color: '#18865A', padding: '1px 5px', borderRadius: '10px', fontSize: '9px' }}>
+                    Sauvegardé
+                  </span>
+                )}
               </div>
             </div>
           ))}
@@ -288,103 +273,98 @@ const previewH = canvasH;
               📷 Fond image
               <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleBgImageUpload} />
             </label>
-            {bgImage && <button onClick={() => setBgImage(null)} style={{ padding: '3px 6px', background: '#FCEAEA', color: '#C02B2B', border: 'none', borderRadius: '4px', fontSize: '11px', cursor: 'pointer' }}>✕</button>}
+            {bgImage && (
+              <button onClick={() => setBgImage(null)} style={{ padding: '3px 6px', background: '#FCEAEA', color: '#C02B2B', border: 'none', borderRadius: '4px', fontSize: '11px', cursor: 'pointer' }}>✕</button>
+            )}
           </div>
           <div style={{ marginLeft: 'auto', display: 'flex', gap: '6px' }}>
-            <button
-              onClick={handleSave}
-              disabled={!selectedDemande || saving}
-              style={{ padding: '5px 12px', background: '#F7F6F3', color: '#6B6860', border: '1px solid #E4E2DC', borderRadius: '6px', fontSize: '11px', fontWeight: '500', cursor: selectedDemande ? 'pointer' : 'not-allowed', fontFamily: 'inherit' }}
-            >
+            <button onClick={handleSave} disabled={!selectedDemande || saving} style={{ padding: '5px 12px', background: '#F7F6F3', color: '#6B6860', border: '1px solid #E4E2DC', borderRadius: '6px', fontSize: '11px', fontWeight: '500', cursor: selectedDemande ? 'pointer' : 'not-allowed', fontFamily: 'inherit' }}>
               {saving ? '⏳' : '💾 Enregistrer'}
             </button>
-            <button
-              onClick={handlePublish}
-              disabled={!selectedDemande || publishing}
-              style={{ padding: '5px 14px', background: selectedDemande ? '#2B5CE6' : '#E4E2DC', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '11px', fontWeight: '600', cursor: selectedDemande ? 'pointer' : 'not-allowed', fontFamily: 'inherit' }}
-            >
+            <button onClick={handlePublish} disabled={!selectedDemande || publishing} style={{ padding: '5px 14px', background: selectedDemande ? '#2B5CE6' : '#E4E2DC', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '11px', fontWeight: '600', cursor: selectedDemande ? 'pointer' : 'not-allowed', fontFamily: 'inherit' }}>
               {publishing ? '⏳ Publication…' : '🚀 Publier'}
             </button>
           </div>
         </div>
 
-        {/* Canvas preview */}
-<div style={{ flex: 1, overflow: 'auto', background: '#F7F6F3', border: '1px solid #E4E2DC', borderRadius: '10px', padding: '20px', display: 'flex', alignItems: 'flex-start', justifyContent: 'center' }}>
-  {!selectedDemande ? (
-    <div style={{ textAlign: 'center', color: '#A8A69F', fontSize: '12px', alignSelf: 'center' }}>
-      ← Sélectionnez une communication pour commencer
-    </div>
-  ) : (
-    <div style={{
-      width: `${previewW * 0.5}px`,
-      height: `${previewH * 0.5}px`,
-      flexShrink: 0,
-      position: 'relative',
-    }}>
-      <div
-        ref={previewRef}
-        style={{
-          width: `${previewW}px`,
-          height: `${previewH}px`,
-          background: bgImage ? `url(${bgImage}) center/cover no-repeat` : bgColor,
-          position: 'absolute',
-          top: 0, left: 0,
-          transform: 'scale(0.5)',
-          transformOrigin: 'top left',
-          overflow: 'hidden',
-          boxShadow: '0 4px 24px rgba(0,0,0,.2)',
-          borderRadius: '3px',
-        }}
-        onClick={() => setSelectedEl(null)}
-      >
-        {elements.map(el => (
-          <div
-            key={el.id}
-            onMouseDown={e => onMouseDown(e, el.id)}
-            onClick={e => { e.stopPropagation(); setSelectedEl(el.id); }}
-            style={{
-              position: 'absolute',
-              left: `${el.x}px`,
-              top: `${el.y}px`,
-              cursor: 'move',
-              userSelect: 'none',
-              outline: selectedEl === el.id ? '2px dashed #2B5CE6' : '1px dashed transparent',
-              padding: '2px',
-              boxSizing: 'border-box',
-            }}
-          >
-            {el.type === 'text' ? (
-              <span style={{
-                fontSize: `${el.fontSize}px`,
-                fontFamily: el.fontFamily,
-                color: el.color,
-                fontWeight: el.bold ? 'bold' : 'normal',
-                fontStyle: el.italic ? 'italic' : 'normal',
-                whiteSpace: 'pre-wrap',
-                display: 'block',
-              }}>
-                {el.text}
-              </span>
-            ) : (
-              <img
-                src={el.src}
-                alt=""
+        {/* Preview */}
+        <div style={{ flex: 1, overflow: 'auto', background: '#F7F6F3', border: '1px solid #E4E2DC', borderRadius: '10px', padding: '20px', display: 'flex', alignItems: 'flex-start', justifyContent: 'center' }}>
+          {!selectedDemande ? (
+            <div style={{ textAlign: 'center', color: '#A8A69F', fontSize: '12px', alignSelf: 'center' }}>
+              ← Sélectionnez une communication pour commencer
+            </div>
+          ) : (
+            <div style={{
+              width: `${canvasW * SCALE}px`,
+              height: `${canvasH * SCALE}px`,
+              flexShrink: 0,
+              position: 'relative',
+            }}>
+              <div
+                ref={previewRef}
                 style={{
-                  width: `${el.width}px`,
-                  height: `${el.height}px`,
-                  display: 'block',
-                  pointerEvents: 'none',
+                  width: `${canvasW}px`,
+                  height: `${canvasH}px`,
+                  background: bgImage ? `url(${bgImage}) center/cover no-repeat` : bgColor,
+                  position: 'absolute',
+                  top: 0, left: 0,
+                  transform: `scale(${SCALE})`,
+                  transformOrigin: 'top left',
+                  overflow: 'hidden',
+                  boxShadow: '0 4px 24px rgba(0,0,0,.2)',
+                  borderRadius: '3px',
                 }}
-              />
-            )}
-          </div>
-        ))}
+                onClick={() => setSelectedEl(null)}
+              >
+                {elements.map(el => (
+                  <div
+                    key={el.id}
+                    onMouseDown={e => onMouseDown(e, el.id)}
+                    onClick={e => { e.stopPropagation(); setSelectedEl(el.id); }}
+                    style={{
+                      position: 'absolute',
+                      left: `${el.x}px`,
+                      top: `${el.y}px`,
+                      cursor: 'move',
+                      userSelect: 'none',
+                      outline: selectedEl === el.id ? '4px dashed #2B5CE6' : '2px dashed transparent',
+                      padding: '4px',
+                      boxSizing: 'border-box',
+                    }}
+                  >
+                    {el.type === 'text' ? (
+                      <span style={{
+                        fontSize: `${el.fontSize}px`,
+                        fontFamily: el.fontFamily,
+                        color: el.color,
+                        fontWeight: el.bold ? 'bold' : 'normal',
+                        fontStyle: el.italic ? 'italic' : 'normal',
+                        whiteSpace: 'pre-wrap',
+                        display: 'block',
+                      }}>
+                        {el.text}
+                      </span>
+                    ) : (
+                      <img
+                        src={el.src}
+                        alt=""
+                        style={{
+                          width: `${el.width}px`,
+                          height: `${el.height}px`,
+                          display: 'block',
+                          pointerEvents: 'none',
+                        }}
+                      />
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
-    </div>
-  )}
-</div>
 
-      {/* Panneau droit — propriétés */}
+      {/* Panneau droit */}
       <div style={{ background: '#fff', border: '1px solid #E4E2DC', borderRadius: '10px', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
         <div style={{ padding: '10px 12px', borderBottom: '1px solid #E4E2DC', fontSize: '12px', fontWeight: '600', color: '#1A1916' }}>
           Propriétés
@@ -406,17 +386,13 @@ const previewH = canvasH;
               </div>
               <div>
                 <div style={{ fontSize: '10px', color: '#6B6860', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: '4px' }}>Police</div>
-                <select
-                  value={selectedElement.fontFamily}
-                  onChange={e => updateElement(selectedElement.id, { fontFamily: e.target.value })}
-                  style={{ width: '100%', padding: '6px 8px', fontSize: '12px', border: '1px solid #CCC9C0', borderRadius: '6px', fontFamily: 'inherit', color: '#1A1916' }}
-                >
+                <select value={selectedElement.fontFamily} onChange={e => updateElement(selectedElement.id, { fontFamily: e.target.value })} style={{ width: '100%', padding: '6px 8px', fontSize: '12px', border: '1px solid #CCC9C0', borderRadius: '6px', fontFamily: 'inherit', color: '#1A1916' }}>
                   {FONTS.map(f => <option key={f} value={f}>{f}</option>)}
                 </select>
               </div>
               <div>
                 <div style={{ fontSize: '10px', color: '#6B6860', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: '4px' }}>Taille : {selectedElement.fontSize}px</div>
-                <input type="range" min="12" max="200" value={selectedElement.fontSize} onChange={e => updateElement(selectedElement.id, { fontSize: parseInt(e.target.value) })} style={{ width: '100%' }} />
+                <input type="range" min="20" max="300" value={selectedElement.fontSize} onChange={e => updateElement(selectedElement.id, { fontSize: parseInt(e.target.value) })} style={{ width: '100%' }} />
               </div>
               <div>
                 <div style={{ fontSize: '10px', color: '#6B6860', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: '4px' }}>Couleur</div>
@@ -437,11 +413,11 @@ const previewH = canvasH;
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               <div>
                 <div style={{ fontSize: '10px', color: '#6B6860', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: '4px' }}>Largeur : {selectedElement.width}px</div>
-                <input type="range" min="20" max={previewW} value={selectedElement.width} onChange={e => updateElement(selectedElement.id, { width: parseInt(e.target.value) })} style={{ width: '100%' }} />
+                <input type="range" min="20" max={canvasW} value={selectedElement.width} onChange={e => updateElement(selectedElement.id, { width: parseInt(e.target.value) })} style={{ width: '100%' }} />
               </div>
               <div>
                 <div style={{ fontSize: '10px', color: '#6B6860', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: '4px' }}>Hauteur : {selectedElement.height}px</div>
-                <input type="range" min="20" max={previewH} value={selectedElement.height} onChange={e => updateElement(selectedElement.id, { height: parseInt(e.target.value) })} style={{ width: '100%' }} />
+                <input type="range" min="20" max={canvasH} value={selectedElement.height} onChange={e => updateElement(selectedElement.id, { height: parseInt(e.target.value) })} style={{ width: '100%' }} />
               </div>
               <button onClick={() => removeElement(selectedElement.id)} style={{ padding: '6px', background: '#FCEAEA', color: '#C02B2B', border: '1px solid #EABABA', borderRadius: '6px', fontSize: '11px', cursor: 'pointer' }}>
                 🗑️ Supprimer
