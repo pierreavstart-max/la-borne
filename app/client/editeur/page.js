@@ -1,6 +1,10 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
 import { getDemandesClient, getBornes, updateDemande } from '../../lib/db';
+const canvasW = isPortrait ? 1080 : 1920;
+const canvasH = isPortrait ? 1920 : 1080;
+const previewW = canvasW;
+const previewH = canvasH;
 
 const FONTS = ['Arial', 'Georgia', 'Verdana', 'Courier New', 'Impact', 'Trebuchet MS'];
 const COLORS = ['#ffffff', '#000000', '#2E8FA3', '#2B5CE6', '#1D9E75', '#C02B2B', '#9A5E0A', '#5B3DB8'];
@@ -96,8 +100,8 @@ export default function EditeurPage() {
       const img = new Image();
       img.onload = () => {
         // Calcule la taille proportionnelle pour la preview
-        const maxW = previewW * 0.5;
-        const ratio = Math.min(maxW / img.width, maxW / img.height);
+       const maxW = canvasW * 0.5;
+       const ratio = Math.min(maxW / img.width, maxW / img.height);
         const el = {
           id: Date.now(),
           type: 'image',
@@ -163,8 +167,8 @@ export default function EditeurPage() {
     canvas.height = H;
     const ctx = canvas.getContext('2d');
 
-    const scaleX = W / preview.offsetWidth;
-    const scaleY = H / preview.offsetHeight;
+    const scaleX = 1;
+const scaleY = 1;
 
     // Fond
     if (bgImage) {
@@ -187,21 +191,15 @@ for (const el of elements) {
     const scaledFontSize = Math.round(el.fontSize * scaleY);
     ctx.font = `${style}${weight}${scaledFontSize}px ${el.fontFamily}`;
     ctx.fillText(
-      el.text,
-      Math.round(el.x * scaleX),
-      Math.round(el.y * scaleY) + scaledFontSize
-    );
+  el.text,
+  Math.round(el.x),
+  Math.round(el.y + el.fontSize)
+);
   } else if (el.type === 'image') {
     const img = new Image();
     img.src = el.src;
     await new Promise(r => { img.onload = r; });
-    ctx.drawImage(
-      img,
-      Math.round(el.x * scaleX),
-      Math.round(el.y * scaleY),
-      Math.round(el.width * scaleX),
-      Math.round(el.height * scaleY)
-    );
+    ctx.drawImage(img, Math.round(el.x), Math.round(el.y), Math.round(el.width), Math.round(el.height));
   }
 }
 
@@ -236,10 +234,6 @@ for (const el of elements) {
 }
 
   const selectedElement = elements.find(el => el.id === selectedEl);
-  const previewW = isPortrait ? 200 : 356;
-  const previewH = isPortrait ? 356 : 200;
-  const canvasW = isPortrait ? 1080 : 1920;
-  const canvasH = isPortrait ? 1920 : 1080;
 
   if (loading) return <div style={{ padding: '40px', textAlign: 'center', color: '#A8A69F', fontSize: '12px' }}>Chargement…</div>;
 
@@ -315,71 +309,71 @@ for (const el of elements) {
         </div>
 
         {/* Canvas preview */}
-        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F7F6F3', border: '1px solid #E4E2DC', borderRadius: '10px', overflow: 'hidden' }}>
-          {!selectedDemande ? (
-            <div style={{ textAlign: 'center', color: '#A8A69F', fontSize: '12px' }}>
-              ← Sélectionnez une communication pour commencer
-            </div>
+<div style={{ flex: 1, overflow: 'auto', background: '#F7F6F3', border: '1px solid #E4E2DC', borderRadius: '10px', padding: '20px', display: 'flex', alignItems: 'flex-start', justifyContent: 'center' }}>
+  {!selectedDemande ? (
+    <div style={{ textAlign: 'center', color: '#A8A69F', fontSize: '12px', alignSelf: 'center' }}>
+      ← Sélectionnez une communication pour commencer
+    </div>
+  ) : (
+    <div
+      ref={previewRef}
+      style={{
+        width: `${previewW}px`,
+        height: `${previewH}px`,
+        background: bgImage ? `url(${bgImage}) center/cover no-repeat` : bgColor,
+        position: 'relative',
+        overflow: 'hidden',
+        boxShadow: '0 4px 24px rgba(0,0,0,.2)',
+        borderRadius: '3px',
+        flexShrink: 0,
+      }}
+      onClick={() => setSelectedEl(null)}
+    >
+      {elements.map(el => (
+        <div
+          key={el.id}
+          onMouseDown={e => onMouseDown(e, el.id)}
+          onClick={e => { e.stopPropagation(); setSelectedEl(el.id); }}
+          style={{
+            position: 'absolute',
+            left: `${el.x}px`,
+            top: `${el.y}px`,
+            cursor: 'move',
+            userSelect: 'none',
+            outline: selectedEl === el.id ? '2px dashed #2B5CE6' : '1px dashed transparent',
+            padding: '2px',
+            boxSizing: 'border-box',
+          }}
+        >
+          {el.type === 'text' ? (
+            <span style={{
+              fontSize: `${el.fontSize}px`,
+              fontFamily: el.fontFamily,
+              color: el.color,
+              fontWeight: el.bold ? 'bold' : 'normal',
+              fontStyle: el.italic ? 'italic' : 'normal',
+              whiteSpace: 'pre-wrap',
+              display: 'block',
+            }}>
+              {el.text}
+            </span>
           ) : (
-            <div
-              ref={previewRef}
+            <img
+              src={el.src}
+              alt=""
               style={{
-                width: `${previewW}px`,
-                height: `${previewH}px`,
-                background: bgImage ? `url(${bgImage}) center/cover no-repeat` : bgColor,
-                position: 'relative',
-                overflow: 'hidden',
-                boxShadow: '0 4px 24px rgba(0,0,0,.2)',
-                borderRadius: '3px',
-                flexShrink: 0,
+                width: `${el.width}px`,
+                height: `${el.height}px`,
+                display: 'block',
+                pointerEvents: 'none',
               }}
-              onClick={() => setSelectedEl(null)}
-            >
-              {elements.map(el => (
-                <div
-                  key={el.id}
-                  onMouseDown={e => onMouseDown(e, el.id)}
-                  onClick={e => { e.stopPropagation(); setSelectedEl(el.id); }}
-                  style={{
-                    position: 'absolute',
-                    left: `${el.x}px`,
-                    top: `${el.y}px`,
-                    cursor: 'move',
-                    userSelect: 'none',
-                    outline: selectedEl === el.id ? '1.5px dashed #2B5CE6' : '1px dashed transparent',
-                    padding: '2px',
-                    boxSizing: 'border-box',
-                  }}
-                >
-                  {el.type === 'text' ? (
-                    <span style={{
-                      fontSize: `${Math.round(el.fontSize * previewH / canvasH)}px`,
-                      fontFamily: el.fontFamily,
-                      color: el.color,
-                      fontWeight: el.bold ? 'bold' : 'normal',
-                      fontStyle: el.italic ? 'italic' : 'normal',
-                      whiteSpace: 'pre-wrap',
-                      display: 'block',
-                    }}>
-                      {el.text}
-                    </span>
-                  ) : (
-                    <img
-                      src={el.src}
-                      alt=""
-                      style={{
-                        width: `${el.width}px`,
-                        height: `${el.height}px`,
-                        display: 'block',
-                        pointerEvents: 'none',
-                      }}
-                    />
-                  )}
-                </div>
-              ))}
-            </div>
+            />
           )}
         </div>
+      ))}
+    </div>
+  )}
+</div>
       </div>
 
       {/* Panneau droit — propriétés */}
