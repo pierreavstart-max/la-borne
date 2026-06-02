@@ -1,10 +1,6 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
 import { getDemandesClient, getBornes, updateDemande } from '../../lib/db';
-const canvasW = isPortrait ? 1080 : 1920;
-const canvasH = isPortrait ? 1920 : 1080;
-const previewW = canvasW;
-const previewH = canvasH;
 
 const FONTS = ['Arial', 'Georgia', 'Verdana', 'Courier New', 'Impact', 'Trebuchet MS'];
 const COLORS = ['#ffffff', '#000000', '#2E8FA3', '#2B5CE6', '#1D9E75', '#C02B2B', '#9A5E0A', '#5B3DB8'];
@@ -232,6 +228,10 @@ for (const el of elements) {
   }
   setPublishing(false);
 }
+const canvasW = isPortrait ? 1080 : 1920;
+const canvasH = isPortrait ? 1920 : 1080;
+const previewW = canvasW;
+const previewH = canvasH;
 
   const selectedElement = elements.find(el => el.id === selectedEl);
 
