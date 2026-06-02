@@ -69,6 +69,20 @@ export default function EditeurPage() {
     setSelectedEl(el.id);
   }
 
+  function addVideoZone() {
+    const W = isPortrait ? 1080 : 1920;
+    const H = isPortrait ? 1920 : 1080;
+    const el = {
+      id: Date.now(),
+      type: 'video',
+      x: 100, y: Math.round(H * 0.2),
+      width: Math.round(W * 0.8),
+      height: Math.round(H * 0.6),
+    };
+    setElements(prev => [...prev, el]);
+    setSelectedEl(el.id);
+  }
+
   function updateElement(id, changes) {
     setElements(prev => prev.map(el => el.id === id ? { ...el, ...changes } : el));
   }
@@ -142,8 +156,86 @@ export default function EditeurPage() {
     alert('Modifications enregistrées !');
   }
 
+  async function handleVideoUpload(videoFile) {
+    setPublishing(true);
+    try {
+      const W = isPortrait ? 1080 : 1920;
+      const H = isPortrait ? 1920 : 1080;
+      const canvas = document.createElement('canvas');
+      canvas.width = W;
+      canvas.height = H;
+      const ctx = canvas.getContext('2d');
+
+      if (bgImage) {
+        const img = new Image();
+        img.src = bgImage;
+        await new Promise(r => { img.onload = r; });
+        ctx.drawImage(img, 0, 0, W, H);
+      } else {
+        ctx.fillStyle = bgColor;
+        ctx.fillRect(0, 0, W, H);
+      }
+
+      for (const el of elements) {
+        if (el.type === 'text') {
+          ctx.fillStyle = el.color;
+          const weight = el.bold ? 'bold ' : '';
+          const style = el.italic ? 'italic ' : '';
+          ctx.font = `${style}${weight}${el.fontSize}px ${el.fontFamily}`;
+          ctx.fillText(el.text, Math.round(el.x), Math.round(el.y + el.fontSize));
+        } else if (el.type === 'image') {
+          const img = new Image();
+          img.src = el.src;
+          await new Promise(r => { img.onload = r; });
+          ctx.drawImage(img, Math.round(el.x), Math.round(el.y), Math.round(el.width), Math.round(el.height));
+        }
+      }
+
+      const bgBlob = await new Promise(r => canvas.toBlob(r, 'image/png'));
+      const videoZone = elements.find(el => el.type === 'video');
+
+      const formData = new FormData();
+      formData.append('video', videoFile);
+      formData.append('background', bgBlob, 'background.png');
+      formData.append('videoX', Math.round(videoZone.x));
+      formData.append('videoY', Math.round(videoZone.y));
+      formData.append('videoW', Math.round(videoZone.width));
+      formData.append('videoH', Math.round(videoZone.height));
+      formData.append('orientation', isPortrait ? 'portrait' : 'paysage');
+      formData.append('filename', selectedDemande.ibFilename || selectedDemande.nom.toLowerCase().replace(/\s+/g, '-') + '.mp4');
+
+      const res = await fetch('/api/infobeamer/assemble-video', {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        await updateDemande(selectedDemande.id, {
+          ibAssetId: data.assetId,
+          ibThumb: data.thumb || null,
+        });
+        alert('Votre communication est publiée !');
+      } else {
+        alert('Erreur : ' + data.error);
+      }
+    } catch (err) {
+      alert('Erreur lors de la publication.');
+    }
+    setPublishing(false);
+  }
+
   async function handlePublish() {
     if (!selectedDemande) return;
+
+    const hasVideoZone = elements.some(el => el.type === 'video');
+    if (selectedDemande.type === 'Vid\u00e9o' && hasVideoZone) {
+      const state = JSON.stringify({ bgColor, bgImage, elements });
+      await updateDemande(selectedDemande.id, { editeurState: state });
+      document.getElementById('video-upload-input').click();
+      return;
+    }
+
     setPublishing(true);
     try {
       const W = isPortrait ? 1080 : 1920;
@@ -221,6 +313,18 @@ export default function EditeurPage() {
   return (
     <div style={{ padding: '16px', display: 'grid', gridTemplateColumns: '200px 1fr 240px', gap: '12px', height: 'calc(100vh - 32px)' }}>
 
+      {/* Input vidéo caché */}
+      <input
+        id="video-upload-input"
+        type="file"
+        accept="video/mp4"
+        style={{ display: 'none' }}
+        onChange={e => {
+          const file = e.target.files[0];
+          if (file) handleVideoUpload(file);
+        }}
+      />
+
       {/* Panneau gauche */}
       <div style={{ background: '#fff', border: '1px solid #E4E2DC', borderRadius: '10px', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
         <div style={{ padding: '10px 12px', borderBottom: '1px solid #E4E2DC', fontSize: '12px', fontWeight: '600', color: '#1A1916' }}>
@@ -266,6 +370,11 @@ export default function EditeurPage() {
             🖼️ Image
             <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleImageElementUpload} />
           </label>
+          {selectedDemande?.type === 'Vid\u00e9o' && (
+            <button onClick={addVideoZone} style={{ padding: '5px 10px', background: '#FDF3E3', color: '#9A5E0A', border: '1px solid #F0C070', borderRadius: '6px', fontSize: '11px', cursor: 'pointer', fontFamily: 'inherit', fontWeight: '500' }}>
+              🎬 Zone vidéo
+            </button>
+          )}
           <div style={{ display: 'flex', alignItems: 'center', gap: '5px', borderLeft: '1px solid #E4E2DC', paddingLeft: '6px' }}>
             <span style={{ fontSize: '11px', color: '#6B6860' }}>Fond :</span>
             <input type="color" value={bgColor} onChange={e => setBgColor(e.target.value)} style={{ width: '26px', height: '26px', border: '1px solid #E4E2DC', borderRadius: '4px', cursor: 'pointer', padding: '1px' }} />
@@ -344,7 +453,7 @@ export default function EditeurPage() {
                       }}>
                         {el.text}
                       </span>
-                    ) : (
+                    ) : el.type === 'image' ? (
                       <img
                         src={el.src}
                         alt=""
@@ -355,7 +464,21 @@ export default function EditeurPage() {
                           pointerEvents: 'none',
                         }}
                       />
-                    )}
+                    ) : el.type === 'video' ? (
+                      <div style={{
+                        width: `${el.width}px`,
+                        height: `${el.height}px`,
+                        background: 'rgba(0,0,0,0.6)',
+                        border: '6px dashed rgba(255,255,255,0.6)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        flexDirection: 'column', gap: '16px',
+                        boxSizing: 'border-box',
+                      }}>
+                        <span style={{ fontSize: '80px' }}>🎬</span>
+                        <span style={{ fontSize: '36px', color: '#fff', fontFamily: 'Arial', fontWeight: '600' }}>Zone vidéo</span>
+                        <span style={{ fontSize: '28px', color: 'rgba(255,255,255,.6)', fontFamily: 'Arial' }}>{el.width} × {el.height}px</span>
+                      </div>
+                    ) : null}
                   </div>
                 ))}
               </div>
@@ -408,6 +531,23 @@ export default function EditeurPage() {
                 <button onClick={() => updateElement(selectedElement.id, { italic: !selectedElement.italic })} style={{ flex: 1, padding: '5px', background: selectedElement.italic ? '#EBF0FD' : '#F7F6F3', color: selectedElement.italic ? '#2B5CE6' : '#6B6860', border: '1px solid #E4E2DC', borderRadius: '6px', fontSize: '13px', cursor: 'pointer', fontStyle: 'italic' }}>I</button>
                 <button onClick={() => removeElement(selectedElement.id)} style={{ flex: 1, padding: '5px', background: '#FCEAEA', color: '#C02B2B', border: '1px solid #EABABA', borderRadius: '6px', fontSize: '11px', cursor: 'pointer' }}>🗑️</button>
               </div>
+            </div>
+          ) : selectedElement.type === 'video' ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <div style={{ padding: '10px', background: '#FDF3E3', border: '1px solid #F0C070', borderRadius: '6px', fontSize: '11px', color: '#9A5E0A', lineHeight: 1.5 }}>
+                🎬 Définissez la zone où sera placée votre vidéo. Cliquez sur Publier pour uploader votre fichier MP4.
+              </div>
+              <div>
+                <div style={{ fontSize: '10px', color: '#6B6860', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: '4px' }}>Largeur : {selectedElement.width}px</div>
+                <input type="range" min="100" max={canvasW} value={selectedElement.width} onChange={e => updateElement(selectedElement.id, { width: parseInt(e.target.value) })} style={{ width: '100%' }} />
+              </div>
+              <div>
+                <div style={{ fontSize: '10px', color: '#6B6860', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: '4px' }}>Hauteur : {selectedElement.height}px</div>
+                <input type="range" min="100" max={canvasH} value={selectedElement.height} onChange={e => updateElement(selectedElement.id, { height: parseInt(e.target.value) })} style={{ width: '100%' }} />
+              </div>
+              <button onClick={() => removeElement(selectedElement.id)} style={{ padding: '6px', background: '#FCEAEA', color: '#C02B2B', border: '1px solid #EABABA', borderRadius: '6px', fontSize: '11px', cursor: 'pointer' }}>
+                🗑️ Supprimer
+              </button>
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
