@@ -1,3 +1,11 @@
+export const maxDuration = 60;
+export const config = {
+  api: {
+    bodyParser: {
+      sizeLimit: '100mb',
+    },
+  },
+};
 import { NextResponse } from 'next/server';
 import { createCanvas, loadImage } from 'canvas';
 import { writeFileSync, readFileSync, unlinkSync } from 'fs';
