@@ -13,26 +13,38 @@ export async function POST(request) {
     const body = await request.json();
     const { bgBase64, videoAssetId, videoX, videoY, videoW, videoH, orientation, filename } = body;
 
-    // Télécharge la vidéo depuis info-beamer
-    const videoRes = await fetch(`https://info-beamer.com/api/v1/asset/${videoAssetId}`, {
+    console.log('assemble-video called:', { videoAssetId, videoX, videoY, videoW, videoH, orientation, filename });
+
+    // Récupère les infos de l'asset
+    const assetInfoRes = await fetch(`https://info-beamer.com/api/v1/asset/${videoAssetId}`, {
       headers: {
         'Authorization': 'Basic ' + Buffer.from('api:' + process.env.INFOBEAMER_API_KEY).toString('base64'),
       },
     });
-    const videoJson = await videoRes.json();
-console.log('Asset info:', JSON.stringify(videoJson).substring(0, 200));
+    const assetInfo = await assetInfoRes.json();
+    console.log('Asset info:', JSON.stringify(assetInfo).substring(0, 300));
 
-    if (!videoRes.ok) {
-      return NextResponse.json({ error: 'Impossible de télécharger la vidéo depuis info-beamer' }, { status: 400 });
+    // Télécharge la vidéo
+    const videoDownloadRes = await fetch(`https://info-beamer.com/api/v1/asset/${videoAssetId}/raw`, {
+      headers: {
+        'Authorization': 'Basic ' + Buffer.from('api:' + process.env.INFOBEAMER_API_KEY).toString('base64'),
+      },
+    });
+
+    if (!videoDownloadRes.ok) {
+      const errText = await videoDownloadRes.text();
+      console.log('Download error:', errText);
+      return NextResponse.json({ error: 'Impossible de télécharger la vidéo: ' + errText }, { status: 400 });
     }
 
-    const videoBuf = Buffer.from(await videoRes.arrayBuffer());
+    const videoBuf = Buffer.from(await videoDownloadRes.arrayBuffer());
     writeFileSync(tmpVideoIn, videoBuf);
+    console.log('Video downloaded, size:', videoBuf.length);
 
     // Décode le fond PNG
     const bgBuf = Buffer.from(bgBase64, 'base64');
 
-    // Pour portrait : pivote le fond
+    // Pour portrait : pivote le fond 90° sens horaire
     if (orientation === 'portrait') {
       const img = await loadImage(bgBuf);
       const canvas = createCanvas(1920, 1080);
@@ -45,7 +57,7 @@ console.log('Asset info:', JSON.stringify(videoJson).substring(0, 200));
       writeFileSync(tmpBg, bgBuf);
     }
 
-    // Coordonnées finales
+    // Coordonnées finales selon orientation
     let finalX = videoX;
     let finalY = videoY;
     let finalW = videoW;
@@ -57,6 +69,8 @@ console.log('Asset info:', JSON.stringify(videoJson).substring(0, 200));
       finalW = videoH;
       finalH = videoW;
     }
+
+    console.log('Final coords:', { finalX, finalY, finalW, finalH });
 
     // Assemble avec ffmpeg
     const ffmpeg = (await import('fluent-ffmpeg')).default;
@@ -80,13 +94,21 @@ console.log('Asset info:', JSON.stringify(videoJson).substring(0, 200));
           '-shortest',
         ])
         .output(tmpOut)
-        .on('end', resolve)
-        .on('error', reject)
+        .on('end', () => {
+          console.log('ffmpeg done');
+          resolve();
+        })
+        .on('error', (err) => {
+          console.log('ffmpeg error:', err.message);
+          reject(err);
+        })
         .run();
     });
 
     // Upload résultat sur info-beamer
     const mp4Buffer = readFileSync(tmpOut);
+    console.log('Output size:', mp4Buffer.length);
+
     const form = new global.FormData();
     const blob = new global.Blob([mp4Buffer], { type: 'video/mp4' });
     form.append('file', blob, filename);
@@ -100,6 +122,7 @@ console.log('Asset info:', JSON.stringify(videoJson).substring(0, 200));
     });
 
     const data = await response.json();
+    console.log('Upload response:', data);
 
     try { unlinkSync(tmpBg); } catch {}
     try { unlinkSync(tmpVideoIn); } catch {}
@@ -116,6 +139,7 @@ console.log('Asset info:', JSON.stringify(videoJson).substring(0, 200));
     });
 
   } catch (error) {
+    console.error('assemble-video error:', error);
     try { unlinkSync(tmpBg); } catch {}
     try { unlinkSync(tmpVideoIn); } catch {}
     try { unlinkSync(tmpOut); } catch {}
