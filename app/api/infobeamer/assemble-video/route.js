@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { createCanvas, loadImage } from 'canvas';
 import { writeFileSync, readFileSync, unlinkSync } from 'fs';
 
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 export async function POST(request) {
   const tmpBg = `/tmp/bg_${Date.now()}.png`;
@@ -67,12 +67,14 @@ export async function POST(request) {
           `[0:v][scaled]overlay=${finalX}:${finalY}[out]`,
         ])
         .outputOptions([
-          '-map [out]',
-          '-c:v libx264',
-          '-pix_fmt yuv420p',
-          '-r 25',
-          '-shortest',
-        ])
+  '-map [out]',
+  '-c:v libx264',
+  '-preset ultrafast',
+  '-crf 28',
+  '-pix_fmt yuv420p',
+  '-r 25',
+  '-shortest',
+])
         .output(tmpOut)
         .on('end', () => { console.log('ffmpeg done'); resolve(); })
         .on('error', (err) => { console.log('ffmpeg error:', err.message); reject(err); })
