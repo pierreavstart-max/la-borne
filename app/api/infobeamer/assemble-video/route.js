@@ -1,29 +1,32 @@
 import { NextResponse } from 'next/server';
 import { createCanvas, loadImage } from 'canvas';
-import { writeFileSync, readFileSync, unlinkSync, existsSync } from 'fs';
+import { writeFileSync, readFileSync, unlinkSync } from 'fs';
 
 export const maxDuration = 60;
 
 export async function POST(request) {
   const tmpBg = `/tmp/bg_${Date.now()}.png`;
+  const tmpVideoIn = `/tmp/vin_${Date.now()}.mp4`;
   const tmpOut = `/tmp/out_${Date.now()}.mp4`;
 
   try {
     const body = await request.json();
-    const { bgBase64, uploadId, videoX, videoY, videoW, videoH, orientation, filename } = body;
+    const { bgBase64, videoURL, videoX, videoY, videoW, videoH, orientation, filename } = body;
 
-    const tmpVideoIn = `/tmp/upload_${uploadId}.mp4`;
+    console.log('assemble-video called:', { videoURL, videoX, videoY, videoW, videoH, orientation });
 
-    if (!existsSync(tmpVideoIn)) {
-      return NextResponse.json({ error: 'Fichier vidéo introuvable — réessayez' }, { status: 400 });
+    // Télécharge la vidéo depuis Firebase Storage
+    const videoRes = await fetch(videoURL);
+    if (!videoRes.ok) {
+      return NextResponse.json({ error: 'Impossible de télécharger la vidéo depuis Firebase' }, { status: 400 });
     }
-
-    console.log('assemble-video called:', { uploadId, videoX, videoY, videoW, videoH, orientation });
+    const videoBuf = Buffer.from(await videoRes.arrayBuffer());
+    writeFileSync(tmpVideoIn, videoBuf);
+    console.log('Video downloaded, size:', videoBuf.length);
 
     // Décode le fond PNG
     const bgBuf = Buffer.from(bgBase64, 'base64');
 
-    // Pour portrait : pivote le fond 90° sens horaire
     if (orientation === 'portrait') {
       const img = await loadImage(bgBuf);
       const canvas = createCanvas(1920, 1080);
@@ -36,7 +39,6 @@ export async function POST(request) {
       writeFileSync(tmpBg, bgBuf);
     }
 
-    // Coordonnées finales selon orientation
     let finalX = videoX;
     let finalY = videoY;
     let finalW = videoW;
@@ -51,7 +53,6 @@ export async function POST(request) {
 
     console.log('Final coords:', { finalX, finalY, finalW, finalH });
 
-    // Assemble avec ffmpeg
     const ffmpeg = (await import('fluent-ffmpeg')).default;
     const ffmpegInstaller = (await import('@ffmpeg-installer/ffmpeg')).default;
     ffmpeg.setFfmpegPath(ffmpegInstaller.path);
@@ -78,7 +79,6 @@ export async function POST(request) {
         .run();
     });
 
-    // Upload résultat sur info-beamer
     const mp4Buffer = readFileSync(tmpOut);
     console.log('Output size:', mp4Buffer.length);
 
@@ -113,6 +113,7 @@ export async function POST(request) {
   } catch (error) {
     console.error('assemble-video error:', error);
     try { unlinkSync(tmpBg); } catch {}
+    try { unlinkSync(tmpVideoIn); } catch {}
     try { unlinkSync(tmpOut); } catch {}
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

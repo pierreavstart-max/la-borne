@@ -164,36 +164,26 @@ export default function EditeurPage() {
 
   setPublishing(true);
   try {
-    const CHUNK_SIZE = 3 * 1024 * 1024; // 3MB par chunk
-    const totalChunks = Math.ceil(videoFile.size / CHUNK_SIZE);
-    const uploadId = Date.now().toString();
+    // Étape 1 : upload sur Firebase Storage
+    const { storage } = await import('../../lib/firebase');
+    const { ref, uploadBytesResumable, getDownloadURL, deleteObject } = await import('firebase/storage');
 
-    // Étape 1 : upload par chunks
-    for (let i = 0; i < totalChunks; i++) {
-      const start = i * CHUNK_SIZE;
-      const end = Math.min(start + CHUNK_SIZE, videoFile.size);
-      const chunk = videoFile.slice(start, end);
+    const storageRef = ref(storage, `videos/${Date.now()}_${videoFile.name}`);
 
-      const formData = new FormData();
-      formData.append('chunk', chunk);
-      formData.append('uploadId', uploadId);
-      formData.append('chunkIndex', i);
-      formData.append('totalChunks', totalChunks);
+    await new Promise((resolve, reject) => {
+      const uploadTask = uploadBytesResumable(storageRef, videoFile);
+      uploadTask.on('state_changed',
+        snapshot => {
+          const progress = Math.round(snapshot.bytesTransferred / snapshot.totalBytes * 100);
+          console.log('Upload Firebase:', progress + '%');
+        },
+        reject,
+        resolve
+      );
+    });
 
-      const res = await fetch('/api/infobeamer/upload-chunk', {
-        method: 'POST',
-        body: formData,
-      });
-      const data = await res.json();
-
-      if (!data.success) {
-        alert('Erreur upload chunk ' + i + ' : ' + data.error);
-        setPublishing(false);
-        return;
-      }
-
-      console.log(`Chunk ${i + 1}/${totalChunks} envoyé`);
-    }
+    const downloadURL = await getDownloadURL(storageRef);
+    console.log('Firebase URL:', downloadURL);
 
     // Étape 2 : génère le fond PNG
     const W = isPortrait ? 1080 : 1920;
@@ -232,13 +222,13 @@ export default function EditeurPage() {
     const videoZone = elements.find(el => el.type === 'video');
     const filename = selectedDemande.ibFilename || selectedDemande.nom.toLowerCase().replace(/\s+/g, '-') + '.mp4';
 
-    // Étape 3 : assemble
+    // Étape 3 : assemble côté serveur
     const assembleRes = await fetch('/api/infobeamer/assemble-video', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         bgBase64,
-        uploadId,
+        videoURL: downloadURL,
         videoX: Math.round(videoZone.x),
         videoY: Math.round(videoZone.y),
         videoW: Math.round(videoZone.width),
@@ -248,6 +238,9 @@ export default function EditeurPage() {
       }),
     });
     const assembleData = await assembleRes.json();
+
+    // Supprime la vidéo de Firebase Storage
+    try { await deleteObject(storageRef); } catch {}
 
     if (assembleData.success) {
       await updateDemande(selectedDemande.id, {
