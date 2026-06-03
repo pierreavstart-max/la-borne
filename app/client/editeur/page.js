@@ -157,73 +157,112 @@ export default function EditeurPage() {
   }
 
   async function handleVideoUpload(videoFile) {
-    setPublishing(true);
-    try {
-      const W = isPortrait ? 1080 : 1920;
-      const H = isPortrait ? 1920 : 1080;
-      const canvas = document.createElement('canvas');
-      canvas.width = W;
-      canvas.height = H;
-      const ctx = canvas.getContext('2d');
-
-      if (bgImage) {
-        const img = new Image();
-        img.src = bgImage;
-        await new Promise(r => { img.onload = r; });
-        ctx.drawImage(img, 0, 0, W, H);
-      } else {
-        ctx.fillStyle = bgColor;
-        ctx.fillRect(0, 0, W, H);
-      }
-
-      for (const el of elements) {
-        if (el.type === 'text') {
-          ctx.fillStyle = el.color;
-          const weight = el.bold ? 'bold ' : '';
-          const style = el.italic ? 'italic ' : '';
-          ctx.font = `${style}${weight}${el.fontSize}px ${el.fontFamily}`;
-          ctx.fillText(el.text, Math.round(el.x), Math.round(el.y + el.fontSize));
-        } else if (el.type === 'image') {
-          const img = new Image();
-          img.src = el.src;
-          await new Promise(r => { img.onload = r; });
-          ctx.drawImage(img, Math.round(el.x), Math.round(el.y), Math.round(el.width), Math.round(el.height));
-        }
-      }
-
-      const bgBlob = await new Promise(r => canvas.toBlob(r, 'image/png'));
-      const videoZone = elements.find(el => el.type === 'video');
-
-      const formData = new FormData();
-      formData.append('video', videoFile);
-      formData.append('background', bgBlob, 'background.png');
-      formData.append('videoX', Math.round(videoZone.x));
-      formData.append('videoY', Math.round(videoZone.y));
-      formData.append('videoW', Math.round(videoZone.width));
-      formData.append('videoH', Math.round(videoZone.height));
-      formData.append('orientation', isPortrait ? 'portrait' : 'paysage');
-      formData.append('filename', selectedDemande.ibFilename || selectedDemande.nom.toLowerCase().replace(/\s+/g, '-') + '.mp4');
-
-      const res = await fetch('/api/infobeamer/assemble-video', {
-        method: 'POST',
-        body: formData,
-      });
-      const data = await res.json();
-
-      if (data.success) {
-        await updateDemande(selectedDemande.id, {
-          ibAssetId: data.assetId,
-          ibThumb: data.thumb || null,
-        });
-        alert('Votre communication est publiée !');
-      } else {
-        alert('Erreur : ' + data.error);
-      }
-    } catch (err) {
-      alert('Erreur lors de la publication.');
-    }
-    setPublishing(false);
+  // Vérifie la taille
+  if (videoFile.size > 50 * 1024 * 1024) {
+    alert('Fichier trop volumineux. Maximum 50MB.');
+    return;
   }
+
+  setPublishing(true);
+  try {
+    // Étape 1 : upload direct de la vidéo sur info-beamer
+    alert('Étape 1/2 : Upload de la vidéo sur info-beamer…');
+    const videoFormData = new FormData();
+    videoFormData.append('file', videoFile);
+
+    const videoRes = await fetch('/api/infobeamer/upload-video-direct', {
+      method: 'POST',
+      body: videoFormData,
+    });
+    const videoData = await videoRes.json();
+
+    if (!videoData.success) {
+      alert('Erreur upload vidéo : ' + videoData.error);
+      setPublishing(false);
+      return;
+    }
+
+    const videoAssetId = videoData.assetId;
+
+    // Étape 2 : génère le fond PNG
+    alert('Étape 2/2 : Assemblage en cours…');
+    const W = isPortrait ? 1080 : 1920;
+    const H = isPortrait ? 1920 : 1080;
+    const canvas = document.createElement('canvas');
+    canvas.width = W;
+    canvas.height = H;
+    const ctx = canvas.getContext('2d');
+
+    if (bgImage) {
+      const img = new Image();
+      img.src = bgImage;
+      await new Promise(r => { img.onload = r; });
+      ctx.drawImage(img, 0, 0, W, H);
+    } else {
+      ctx.fillStyle = bgColor;
+      ctx.fillRect(0, 0, W, H);
+    }
+
+    for (const el of elements) {
+      if (el.type === 'text') {
+        ctx.fillStyle = el.color;
+        const weight = el.bold ? 'bold ' : '';
+        const style = el.italic ? 'italic ' : '';
+        ctx.font = `${style}${weight}${el.fontSize}px ${el.fontFamily}`;
+        ctx.fillText(el.text, Math.round(el.x), Math.round(el.y + el.fontSize));
+      } else if (el.type === 'image') {
+        const img = new Image();
+        img.src = el.src;
+        await new Promise(r => { img.onload = r; });
+        ctx.drawImage(img, Math.round(el.x), Math.round(el.y), Math.round(el.width), Math.round(el.height));
+      }
+    }
+
+    // Convertit en base64
+    const bgBase64 = canvas.toDataURL('image/png').split(',')[1];
+    const videoZone = elements.find(el => el.type === 'video');
+    const filename = selectedDemande.ibFilename || selectedDemande.nom.toLowerCase().replace(/\s+/g, '-') + '.mp4';
+
+    // Étape 3 : assemble sur le serveur
+    const assembleRes = await fetch('/api/infobeamer/assemble-video', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        bgBase64,
+        videoAssetId,
+        videoX: Math.round(videoZone.x),
+        videoY: Math.round(videoZone.y),
+        videoW: Math.round(videoZone.width),
+        videoH: Math.round(videoZone.height),
+        orientation: isPortrait ? 'portrait' : 'paysage',
+        filename,
+      }),
+    });
+    const assembleData = await assembleRes.json();
+
+    if (assembleData.success) {
+      // Supprime la vidéo temporaire sur info-beamer
+      await fetch('/api/infobeamer/delete-asset', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ assetId: videoAssetId }),
+      });
+
+      await updateDemande(selectedDemande.id, {
+        ibAssetId: assembleData.assetId,
+        ibThumb: assembleData.thumb || null,
+        editeurState: JSON.stringify({ bgColor, bgImage, elements }),
+      });
+      alert('Votre communication est publiée !');
+    } else {
+      alert('Erreur assemblage : ' + assembleData.error);
+    }
+  } catch (err) {
+    alert('Erreur lors de la publication.');
+    console.error(err);
+  }
+  setPublishing(false);
+}
 
   async function handlePublish() {
     if (!selectedDemande) return;
