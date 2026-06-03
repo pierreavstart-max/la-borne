@@ -164,108 +164,183 @@ export default function EditeurPage() {
 
   setPublishing(true);
   try {
-    // Étape 1 : récupère la clé API depuis notre serveur
-    const keyRes = await fetch('/api/infobeamer/get-upload-token');
-    const { token } = await keyRes.json();
+    alert('Assemblage en cours — cela peut prendre quelques minutes. Ne fermez pas cette page.');
 
-    // Étape 2 : upload direct depuis le navigateur vers info-beamer
-    alert('Étape 1/2 : Upload de la vidéo…');
-    const form = new FormData();
-    form.append('file', videoFile);
-
-    const videoRes = await fetch('https://info-beamer.com/api/v1/asset/upload', {
-      method: 'POST',
-      headers: {
-        'Authorization': 'Basic ' + btoa('api:' + token),
-      },
-      body: form,
-    });
-    const videoData = await videoRes.json();
-
-    if (!videoData.ok) {
-      alert('Erreur upload vidéo : ' + videoData.error);
-      setPublishing(false);
-      return;
-    }
-
-    const videoAssetId = videoData.asset_id;
-
-    // Étape 2 : génère le fond PNG
-    alert('Étape 2/2 : Assemblage en cours…');
     const W = isPortrait ? 1080 : 1920;
     const H = isPortrait ? 1920 : 1080;
+
+    // Canvas de rendu
     const canvas = document.createElement('canvas');
     canvas.width = W;
     canvas.height = H;
     const ctx = canvas.getContext('2d');
 
+    // Prépare le fond
+    let bgImg = null;
     if (bgImage) {
-      const img = new Image();
-      img.src = bgImage;
-      await new Promise(r => { img.onload = r; });
-      ctx.drawImage(img, 0, 0, W, H);
-    } else {
-      ctx.fillStyle = bgColor;
-      ctx.fillRect(0, 0, W, H);
+      bgImg = new Image();
+      bgImg.src = bgImage;
+      await new Promise(r => { bgImg.onload = r; });
     }
 
+    // Prépare les images overlay
+    const imgEls = {};
     for (const el of elements) {
-      if (el.type === 'text') {
-        ctx.fillStyle = el.color;
-        const weight = el.bold ? 'bold ' : '';
-        const style = el.italic ? 'italic ' : '';
-        ctx.font = `${style}${weight}${el.fontSize}px ${el.fontFamily}`;
-        ctx.fillText(el.text, Math.round(el.x), Math.round(el.y + el.fontSize));
-      } else if (el.type === 'image') {
+      if (el.type === 'image') {
         const img = new Image();
         img.src = el.src;
         await new Promise(r => { img.onload = r; });
-        ctx.drawImage(img, Math.round(el.x), Math.round(el.y), Math.round(el.width), Math.round(el.height));
+        imgEls[el.id] = img;
       }
     }
 
-    // Convertit en base64
-    const bgBase64 = canvas.toDataURL('image/png').split(',')[1];
+    // Prépare la vidéo source
     const videoZone = elements.find(el => el.type === 'video');
+    const videoUrl = URL.createObjectURL(videoFile);
+    const videoEl = document.createElement('video');
+    videoEl.src = videoUrl;
+    videoEl.muted = true;
+    videoEl.playsInline = true;
+    await new Promise(r => { videoEl.onloadedmetadata = r; });
+
+    // Rotation pour portrait
+    let finalX = videoZone.x;
+    let finalY = videoZone.y;
+    let finalW = videoZone.width;
+    let finalH = videoZone.height;
+
+    if (isPortrait) {
+      finalX = 1920 - videoZone.y - videoZone.height;
+      finalY = videoZone.x;
+      finalW = videoZone.height;
+      finalH = videoZone.width;
+    }
+
+    function drawFrame() {
+      // Fond
+      if (bgImg) {
+        if (isPortrait) {
+          ctx.save();
+          ctx.translate(W, 0);
+          ctx.rotate(Math.PI / 2);
+          ctx.drawImage(bgImg, 0, 0, H, W);
+          ctx.restore();
+        } else {
+          ctx.drawImage(bgImg, 0, 0, W, H);
+        }
+      } else {
+        ctx.fillStyle = bgColor;
+        ctx.fillRect(0, 0, W, H);
+      }
+
+      // Vidéo dans sa zone
+      ctx.drawImage(videoEl, finalX, finalY, finalW, finalH);
+
+      // Textes et images overlay
+      for (const el of elements) {
+        if (el.type === 'text') {
+          const weight = el.bold ? 'bold ' : '';
+          const style = el.italic ? 'italic ' : '';
+          let elX = el.x;
+          let elY = el.y + el.fontSize;
+          if (isPortrait) {
+            ctx.save();
+            ctx.translate(W, 0);
+            ctx.rotate(Math.PI / 2);
+            ctx.fillStyle = el.color;
+            ctx.font = `${style}${weight}${el.fontSize}px ${el.fontFamily}`;
+            ctx.fillText(el.text, elX, elY);
+            ctx.restore();
+          } else {
+            ctx.fillStyle = el.color;
+            ctx.font = `${style}${weight}${el.fontSize}px ${el.fontFamily}`;
+            ctx.fillText(el.text, elX, elY);
+          }
+        } else if (el.type === 'image' && imgEls[el.id]) {
+          if (isPortrait) {
+            ctx.save();
+            ctx.translate(W, 0);
+            ctx.rotate(Math.PI / 2);
+            ctx.drawImage(imgEls[el.id], el.x, el.y, el.width, el.height);
+            ctx.restore();
+          } else {
+            ctx.drawImage(imgEls[el.id], el.x, el.y, el.width, el.height);
+          }
+        }
+      }
+    }
+
+    // Capture du canvas avec MediaRecorder
+    const stream = canvas.captureStream(25);
+    
+    // Ajoute l'audio si disponible
+    const audioCtx = new AudioContext();
+    const source = audioCtx.createMediaElementSource(videoEl);
+    const dest = audioCtx.createMediaStreamDestination();
+    source.connect(dest);
+    source.connect(audioCtx.destination);
+    stream.addTrack(dest.stream.getAudioTracks()[0]);
+
+    const chunks = [];
+    const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')
+      ? 'video/webm;codecs=vp9,opus'
+      : 'video/webm';
+
+    const recorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 5000000 });
+    recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+
+    // Lance l'enregistrement
+    recorder.start(100);
+    videoEl.currentTime = 0;
+    await videoEl.play();
+
+    // Dessine les frames pendant la durée de la vidéo
+    await new Promise(resolve => {
+      const interval = setInterval(() => {
+        drawFrame();
+        if (videoEl.ended || videoEl.currentTime >= videoEl.duration) {
+          clearInterval(interval);
+          resolve();
+        }
+      }, 1000 / 25);
+    });
+
+    recorder.stop();
+    await new Promise(r => { recorder.onstop = r; });
+    URL.revokeObjectURL(videoUrl);
+
+    // Crée le blob final
+    const webmBlob = new Blob(chunks, { type: mimeType });
     const filename = selectedDemande.ibFilename || selectedDemande.nom.toLowerCase().replace(/\s+/g, '-') + '.mp4';
 
-    // Étape 3 : assemble sur le serveur
-    const assembleRes = await fetch('/api/infobeamer/assemble-video', {
+    // Upload sur info-beamer via notre API
+    const keyRes = await fetch('/api/infobeamer/get-upload-token');
+    const { token } = await keyRes.json();
+
+    const form = new FormData();
+    form.append('file', webmBlob, filename);
+
+    const uploadRes = await fetch('https://info-beamer.com/api/v1/asset/upload', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        bgBase64,
-        videoAssetId,
-        videoX: Math.round(videoZone.x),
-        videoY: Math.round(videoZone.y),
-        videoW: Math.round(videoZone.width),
-        videoH: Math.round(videoZone.height),
-        orientation: isPortrait ? 'portrait' : 'paysage',
-        filename,
-      }),
+      headers: { 'Authorization': 'Basic ' + btoa('api:' + token) },
+      body: form,
     });
-    const assembleData = await assembleRes.json();
+    const uploadData = await uploadRes.json();
 
-    if (assembleData.success) {
-      // Supprime la vidéo temporaire sur info-beamer
-      await fetch('/api/infobeamer/delete-asset', {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ assetId: videoAssetId }),
-      });
-
+    if (uploadData.ok) {
       await updateDemande(selectedDemande.id, {
-        ibAssetId: assembleData.assetId,
-        ibThumb: assembleData.thumb || null,
+        ibAssetId: uploadData.asset_id,
+        ibThumb: uploadData.info?.thumb || null,
         editeurState: JSON.stringify({ bgColor, bgImage, elements }),
       });
       alert('Votre communication est publiée !');
     } else {
-      alert('Erreur assemblage : ' + assembleData.error);
+      alert('Erreur upload : ' + uploadData.error);
     }
+
   } catch (err) {
-    alert('Erreur lors de la publication.');
     console.error(err);
+    alert('Erreur lors de la publication : ' + err.message);
   }
   setPublishing(false);
 }
