@@ -14,11 +14,13 @@ export async function POST(request) {
     const { bgBase64, videoAssetId, videoX, videoY, videoW, videoH, orientation, filename } = body;
 
     // Télécharge la vidéo depuis info-beamer
-    const videoRes = await fetch(`https://info-beamer.com/api/v1/asset/${videoAssetId}/download`, {
+    const videoRes = await fetch(`https://info-beamer.com/api/v1/asset/${videoAssetId}`, {
       headers: {
         'Authorization': 'Basic ' + Buffer.from('api:' + process.env.INFOBEAMER_API_KEY).toString('base64'),
       },
     });
+    const videoJson = await videoRes.json();
+console.log('Asset info:', JSON.stringify(videoJson).substring(0, 200));
 
     if (!videoRes.ok) {
       return NextResponse.json({ error: 'Impossible de télécharger la vidéo depuis info-beamer' }, { status: 400 });
