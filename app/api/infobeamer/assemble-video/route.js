@@ -1,45 +1,24 @@
 import { NextResponse } from 'next/server';
 import { createCanvas, loadImage } from 'canvas';
-import { writeFileSync, readFileSync, unlinkSync } from 'fs';
+import { writeFileSync, readFileSync, unlinkSync, existsSync } from 'fs';
 
 export const maxDuration = 60;
 
 export async function POST(request) {
   const tmpBg = `/tmp/bg_${Date.now()}.png`;
-  const tmpVideoIn = `/tmp/vin_${Date.now()}.mp4`;
   const tmpOut = `/tmp/out_${Date.now()}.mp4`;
 
   try {
     const body = await request.json();
-    const { bgBase64, videoAssetId, videoX, videoY, videoW, videoH, orientation, filename } = body;
+    const { bgBase64, uploadId, videoX, videoY, videoW, videoH, orientation, filename } = body;
 
-    console.log('assemble-video called:', { videoAssetId, videoX, videoY, videoW, videoH, orientation, filename });
+    const tmpVideoIn = `/tmp/upload_${uploadId}.mp4`;
 
-    // Récupère les infos de l'asset
-    const assetInfoRes = await fetch(`https://info-beamer.com/api/v1/asset/${videoAssetId}`, {
-      headers: {
-        'Authorization': 'Basic ' + Buffer.from('api:' + process.env.INFOBEAMER_API_KEY).toString('base64'),
-      },
-    });
-    const assetInfo = await assetInfoRes.json();
-    console.log('Asset info:', JSON.stringify(assetInfo).substring(0, 300));
-
-    // Télécharge la vidéo
-    const videoDownloadRes = await fetch(`https://info-beamer.com/api/v1/asset/${videoAssetId}/raw`, {
-      headers: {
-        'Authorization': 'Basic ' + Buffer.from('api:' + process.env.INFOBEAMER_API_KEY).toString('base64'),
-      },
-    });
-
-    if (!videoDownloadRes.ok) {
-      const errText = await videoDownloadRes.text();
-      console.log('Download error:', errText);
-      return NextResponse.json({ error: 'Impossible de télécharger la vidéo: ' + errText }, { status: 400 });
+    if (!existsSync(tmpVideoIn)) {
+      return NextResponse.json({ error: 'Fichier vidéo introuvable — réessayez' }, { status: 400 });
     }
 
-    const videoBuf = Buffer.from(await videoDownloadRes.arrayBuffer());
-    writeFileSync(tmpVideoIn, videoBuf);
-    console.log('Video downloaded, size:', videoBuf.length);
+    console.log('assemble-video called:', { uploadId, videoX, videoY, videoW, videoH, orientation });
 
     // Décode le fond PNG
     const bgBuf = Buffer.from(bgBase64, 'base64');
@@ -94,14 +73,8 @@ export async function POST(request) {
           '-shortest',
         ])
         .output(tmpOut)
-        .on('end', () => {
-          console.log('ffmpeg done');
-          resolve();
-        })
-        .on('error', (err) => {
-          console.log('ffmpeg error:', err.message);
-          reject(err);
-        })
+        .on('end', () => { console.log('ffmpeg done'); resolve(); })
+        .on('error', (err) => { console.log('ffmpeg error:', err.message); reject(err); })
         .run();
     });
 
@@ -122,7 +95,6 @@ export async function POST(request) {
     });
 
     const data = await response.json();
-    console.log('Upload response:', data);
 
     try { unlinkSync(tmpBg); } catch {}
     try { unlinkSync(tmpVideoIn); } catch {}
@@ -141,7 +113,6 @@ export async function POST(request) {
   } catch (error) {
     console.error('assemble-video error:', error);
     try { unlinkSync(tmpBg); } catch {}
-    try { unlinkSync(tmpVideoIn); } catch {}
     try { unlinkSync(tmpOut); } catch {}
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
