@@ -157,7 +157,6 @@ export default function EditeurPage() {
   }
 
   async function handleVideoUpload(videoFile) {
-  // Vérifie la taille
   if (videoFile.size > 50 * 1024 * 1024) {
     alert('Fichier trop volumineux. Maximum 50MB.');
     return;
@@ -165,24 +164,31 @@ export default function EditeurPage() {
 
   setPublishing(true);
   try {
-    // Étape 1 : upload direct de la vidéo sur info-beamer
-    alert('Étape 1/2 : Upload de la vidéo sur info-beamer…');
-    const videoFormData = new FormData();
-    videoFormData.append('file', videoFile);
+    // Étape 1 : récupère la clé API depuis notre serveur
+    const keyRes = await fetch('/api/infobeamer/get-upload-token');
+    const { token } = await keyRes.json();
 
-    const videoRes = await fetch('/api/infobeamer/upload-video-direct', {
+    // Étape 2 : upload direct depuis le navigateur vers info-beamer
+    alert('Étape 1/2 : Upload de la vidéo…');
+    const form = new FormData();
+    form.append('file', videoFile);
+
+    const videoRes = await fetch('https://info-beamer.com/api/v1/asset/upload', {
       method: 'POST',
-      body: videoFormData,
+      headers: {
+        'Authorization': 'Basic ' + btoa('api:' + token),
+      },
+      body: form,
     });
     const videoData = await videoRes.json();
 
-    if (!videoData.success) {
+    if (!videoData.ok) {
       alert('Erreur upload vidéo : ' + videoData.error);
       setPublishing(false);
       return;
     }
 
-    const videoAssetId = videoData.assetId;
+    const videoAssetId = videoData.asset_id;
 
     // Étape 2 : génère le fond PNG
     alert('Étape 2/2 : Assemblage en cours…');
