@@ -315,7 +315,7 @@ export default function EditeurPage() {
   }
 
   const selectedElement = elements.find(el => el.id === selectedEl);
-  const isVideoPublishing = publishing && selectedDemande?.type === 'Vid\u00e9o';
+  const isVideoPublishing = publishing;
   const isVideoMode = selectedDemande?.type === 'Vid\u00e9o' && elements.some(el => el.type === 'video');
 
   if (loading) return (
