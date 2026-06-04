@@ -5,6 +5,7 @@ import { getDemandesClient, getBornes, updateDemande } from '../../lib/db';
 const FONTS = ['Arial', 'Georgia', 'Verdana', 'Courier New', 'Impact', 'Trebuchet MS'];
 const COLORS = ['#ffffff', '#000000', '#2E8FA3', '#2B5CE6', '#1D9E75', '#C02B2B', '#9A5E0A', '#5B3DB8'];
 const SCALE = 0.5;
+const RATIO = 16 / 9;
 
 export default function EditeurPage() {
   const [demandes, setDemandes] = useState([]);
@@ -53,6 +54,9 @@ export default function EditeurPage() {
     }
   }
 
+  const canvasW = isPortrait ? 1080 : 1920;
+  const canvasH = isPortrait ? 1920 : 1080;
+
   function addText() {
     const el = {
       id: Date.now(),
@@ -70,14 +74,20 @@ export default function EditeurPage() {
   }
 
   function addVideoZone() {
-    const W = isPortrait ? 1080 : 1920;
-    const H = isPortrait ? 1920 : 1080;
+    const existingVideoZone = elements.find(el => el.type === 'video');
+    if (existingVideoZone) {
+      alert('Une zone vidéo existe déjà. Supprimez-la avant d\'en ajouter une nouvelle.');
+      return;
+    }
+    const defaultW = canvasW;
+    const defaultH = Math.round(defaultW / RATIO);
     const el = {
       id: Date.now(),
       type: 'video',
-      x: 100, y: Math.round(H * 0.2),
-      width: Math.round(W * 0.8),
-      height: Math.round(H * 0.6),
+      x: 0,
+      y: Math.round((canvasH - defaultH) / 2),
+      width: defaultW,
+      height: defaultH,
     };
     setElements(prev => [...prev, el]);
     setSelectedEl(el.id);
@@ -107,7 +117,7 @@ export default function EditeurPage() {
     reader.onload = ev => {
       const img = new Image();
       img.onload = () => {
-        const maxW = (isPortrait ? 1080 : 1920) * 0.4;
+        const maxW = canvasW * 0.4;
         const ratio = Math.min(maxW / img.width, maxW / img.height);
         const el = {
           id: Date.now(),
@@ -157,108 +167,104 @@ export default function EditeurPage() {
   }
 
   async function handleVideoUpload(videoFile) {
-  if (videoFile.size > 50 * 1024 * 1024) {
-    alert('Fichier trop volumineux. Maximum 50MB.');
-    return;
-  }
-
-  setPublishing(true);
-  try {
-    // Étape 1 : upload sur Firebase Storage
-    const { storage } = await import('../../lib/firebase');
-    const { ref, uploadBytesResumable, getDownloadURL, deleteObject } = await import('firebase/storage');
-
-    const storageRef = ref(storage, `videos/${Date.now()}_${videoFile.name}`);
-
-    await new Promise((resolve, reject) => {
-      const uploadTask = uploadBytesResumable(storageRef, videoFile);
-      uploadTask.on('state_changed',
-        snapshot => {
-          const progress = Math.round(snapshot.bytesTransferred / snapshot.totalBytes * 100);
-          console.log('Upload Firebase:', progress + '%');
-        },
-        reject,
-        resolve
-      );
-    });
-
-    const downloadURL = await getDownloadURL(storageRef);
-    console.log('Firebase URL:', downloadURL);
-
-    // Étape 2 : génère le fond PNG
-    const W = isPortrait ? 1080 : 1920;
-    const H = isPortrait ? 1920 : 1080;
-    const canvas = document.createElement('canvas');
-    canvas.width = W;
-    canvas.height = H;
-    const ctx = canvas.getContext('2d');
-
-    if (bgImage) {
-      const img = new Image();
-      img.src = bgImage;
-      await new Promise(r => { img.onload = r; });
-      ctx.drawImage(img, 0, 0, W, H);
-    } else {
-      ctx.fillStyle = bgColor;
-      ctx.fillRect(0, 0, W, H);
+    if (videoFile.size > 50 * 1024 * 1024) {
+      alert('Fichier trop volumineux. Maximum 50MB.');
+      return;
     }
 
-    for (const el of elements) {
-      if (el.type === 'text') {
-        ctx.fillStyle = el.color;
-        const weight = el.bold ? 'bold ' : '';
-        const style = el.italic ? 'italic ' : '';
-        ctx.font = `${style}${weight}${el.fontSize}px ${el.fontFamily}`;
-        ctx.fillText(el.text, Math.round(el.x), Math.round(el.y + el.fontSize));
-      } else if (el.type === 'image') {
-        const img = new Image();
-        img.src = el.src;
-        await new Promise(r => { img.onload = r; });
-        ctx.drawImage(img, Math.round(el.x), Math.round(el.y), Math.round(el.width), Math.round(el.height));
-      }
-    }
+    setPublishing(true);
+    try {
+      const { storage } = await import('../../lib/firebase');
+      const { ref, uploadBytesResumable, getDownloadURL, deleteObject } = await import('firebase/storage');
 
-    const bgBase64 = canvas.toDataURL('image/png').split(',')[1];
-    const videoZone = elements.find(el => el.type === 'video');
-    const filename = selectedDemande.ibFilename || selectedDemande.nom.toLowerCase().replace(/\s+/g, '-') + '.mp4';
+      const storageRef = ref(storage, `videos/${Date.now()}_${videoFile.name}`);
 
-    // Étape 3 : assemble côté serveur
-    const assembleRes = await fetch('/api/infobeamer/assemble-video', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        bgBase64,
-        videoURL: downloadURL,
-        videoX: Math.round(videoZone.x),
-        videoY: Math.round(videoZone.y),
-        videoW: Math.round(videoZone.width),
-        videoH: Math.round(videoZone.height),
-        orientation: isPortrait ? 'portrait' : 'paysage',
-        filename,
-      }),
-    });
-    const assembleData = await assembleRes.json();
-
-    // Supprime la vidéo de Firebase Storage
-    try { await deleteObject(storageRef); } catch {}
-
-    if (assembleData.success) {
-      await updateDemande(selectedDemande.id, {
-        ibAssetId: assembleData.assetId,
-        ibThumb: assembleData.thumb || null,
-        editeurState: JSON.stringify({ bgColor, bgImage, elements }),
+      await new Promise((resolve, reject) => {
+        const uploadTask = uploadBytesResumable(storageRef, videoFile);
+        uploadTask.on('state_changed',
+          snapshot => {
+            const progress = Math.round(snapshot.bytesTransferred / snapshot.totalBytes * 100);
+            console.log('Upload Firebase:', progress + '%');
+          },
+          reject,
+          resolve
+        );
       });
-      alert('Votre communication est publiée !');
-    } else {
-      alert('Erreur assemblage : ' + assembleData.error);
-    }
 
-  } catch (err) {
-    console.error(err);
-    alert('Erreur lors de la publication : ' + err.message);
+      const downloadURL = await getDownloadURL(storageRef);
+      console.log('Firebase URL:', downloadURL);
+
+      const W = isPortrait ? 1080 : 1920;
+      const H = isPortrait ? 1920 : 1080;
+      const canvas = document.createElement('canvas');
+      canvas.width = W;
+      canvas.height = H;
+      const ctx = canvas.getContext('2d');
+
+      if (bgImage) {
+        const img = new Image();
+        img.src = bgImage;
+        await new Promise(r => { img.onload = r; });
+        ctx.drawImage(img, 0, 0, W, H);
+      } else {
+        ctx.fillStyle = bgColor;
+        ctx.fillRect(0, 0, W, H);
+      }
+
+      for (const el of elements) {
+        if (el.type === 'text') {
+          ctx.fillStyle = el.color;
+          const weight = el.bold ? 'bold ' : '';
+          const style = el.italic ? 'italic ' : '';
+          ctx.font = `${style}${weight}${el.fontSize}px ${el.fontFamily}`;
+          ctx.fillText(el.text, Math.round(el.x), Math.round(el.y + el.fontSize));
+        } else if (el.type === 'image') {
+          const img = new Image();
+          img.src = el.src;
+          await new Promise(r => { img.onload = r; });
+          ctx.drawImage(img, Math.round(el.x), Math.round(el.y), Math.round(el.width), Math.round(el.height));
+        }
+      }
+
+      const bgBase64 = canvas.toDataURL('image/png').split(',')[1];
+      const videoZone = elements.find(el => el.type === 'video');
+      const filename = selectedDemande.ibFilename || selectedDemande.nom.toLowerCase().replace(/\s+/g, '-') + '.mp4';
+
+      const assembleRes = await fetch('/api/infobeamer/assemble-video', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          bgBase64,
+          videoURL: downloadURL,
+          videoX: Math.round(videoZone.x),
+          videoY: Math.round(videoZone.y),
+          videoW: Math.round(videoZone.width),
+          videoH: Math.round(videoZone.height),
+          orientation: isPortrait ? 'portrait' : 'paysage',
+          filename,
+        }),
+      });
+      const assembleData = await assembleRes.json();
+
+      try { await deleteObject(storageRef); } catch {}
+
+      if (assembleData.success) {
+        await updateDemande(selectedDemande.id, {
+          ibAssetId: assembleData.assetId,
+          ibThumb: assembleData.thumb || null,
+          editeurState: JSON.stringify({ bgColor, bgImage, elements }),
+        });
+        alert('Votre communication est publiée !');
+      } else {
+        alert('Erreur assemblage : ' + assembleData.error);
+      }
+
+    } catch (err) {
+      console.error(err);
+      alert('Erreur lors de la publication : ' + err.message);
+    }
+    setPublishing(false);
   }
-  setPublishing(false);
-}
 
   async function handlePublish() {
     if (!selectedDemande) return;
@@ -336,8 +342,6 @@ export default function EditeurPage() {
   }
 
   const selectedElement = elements.find(el => el.id === selectedEl);
-  const canvasW = isPortrait ? 1080 : 1920;
-  const canvasH = isPortrait ? 1920 : 1080;
 
   if (loading) return (
     <div style={{ padding: '40px', textAlign: 'center', color: '#A8A69F', fontSize: '12px' }}>
@@ -348,7 +352,6 @@ export default function EditeurPage() {
   return (
     <div style={{ padding: '16px', display: 'grid', gridTemplateColumns: '200px 1fr 240px', gap: '12px', height: 'calc(100vh - 32px)' }}>
 
-      {/* Input vidéo caché */}
       <input
         id="video-upload-input"
         type="file"
@@ -570,15 +573,19 @@ export default function EditeurPage() {
           ) : selectedElement.type === 'video' ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               <div style={{ padding: '10px', background: '#FDF3E3', border: '1px solid #F0C070', borderRadius: '6px', fontSize: '11px', color: '#9A5E0A', lineHeight: 1.5 }}>
-                🎬 Définissez la zone où sera placée votre vidéo. Cliquez sur Publier pour uploader votre fichier MP4.
+                🎬 Définissez la zone où sera placée votre vidéo. Le ratio 16:9 est maintenu automatiquement.
               </div>
               <div>
                 <div style={{ fontSize: '10px', color: '#6B6860', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: '4px' }}>Largeur : {selectedElement.width}px</div>
-                <input type="range" min="100" max={canvasW} value={selectedElement.width} onChange={e => updateElement(selectedElement.id, { width: parseInt(e.target.value) })} style={{ width: '100%' }} />
+                <input type="range" min="100" max={canvasW} value={selectedElement.width} onChange={e => {
+                  const w = parseInt(e.target.value);
+                  const h = Math.round(w / RATIO);
+                  updateElement(selectedElement.id, { width: w, height: h });
+                }} style={{ width: '100%' }} />
               </div>
               <div>
-                <div style={{ fontSize: '10px', color: '#6B6860', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: '4px' }}>Hauteur : {selectedElement.height}px</div>
-                <input type="range" min="100" max={canvasH} value={selectedElement.height} onChange={e => updateElement(selectedElement.id, { height: parseInt(e.target.value) })} style={{ width: '100%' }} />
+                <div style={{ fontSize: '10px', color: '#6B6860', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: '4px' }}>Hauteur : {selectedElement.height}px (auto)</div>
+                <div style={{ fontSize: '10px', color: '#A8A69F' }}>Ratio 16:9 maintenu automatiquement</div>
               </div>
               <button onClick={() => removeElement(selectedElement.id)} style={{ padding: '6px', background: '#FCEAEA', color: '#C02B2B', border: '1px solid #EABABA', borderRadius: '6px', fontSize: '11px', cursor: 'pointer' }}>
                 🗑️ Supprimer
