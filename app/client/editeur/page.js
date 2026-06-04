@@ -14,6 +14,7 @@ export default function EditeurPage() {
   const [loading, setLoading] = useState(true);
   const [publishing, setPublishing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [saveMsg, setSaveMsg] = useState('');
   const [bgColor, setBgColor] = useState('#2E8FA3');
   const [bgImage, setBgImage] = useState(null);
   const [elements, setElements] = useState([]);
@@ -42,6 +43,7 @@ export default function EditeurPage() {
   function selectDemande(d) {
     setSelectedDemande(d);
     setSelectedEl(null);
+    setSaveMsg('');
     if (d.editeurState) {
       const state = JSON.parse(d.editeurState);
       setBgColor(state.bgColor || '#2E8FA3');
@@ -76,7 +78,7 @@ export default function EditeurPage() {
   function addVideoZone() {
     const existingVideoZone = elements.find(el => el.type === 'video');
     if (existingVideoZone) {
-      alert('Une zone vidéo existe déjà. Supprimez-la avant d\'en ajouter une nouvelle.');
+      alert("Une zone vidéo existe déjà. Supprimez-la avant d'en ajouter une nouvelle.");
       return;
     }
     const defaultW = canvasW;
@@ -108,6 +110,7 @@ export default function EditeurPage() {
     const reader = new FileReader();
     reader.onload = ev => setBgImage(ev.target.result);
     reader.readAsDataURL(file);
+    e.target.value = '';
   }
 
   function handleImageElementUpload(e) {
@@ -133,6 +136,7 @@ export default function EditeurPage() {
       img.src = ev.target.result;
     };
     reader.readAsDataURL(file);
+    e.target.value = '';
   }
 
   function onMouseDown(e, id) {
@@ -160,10 +164,22 @@ export default function EditeurPage() {
   async function handleSave() {
     if (!selectedDemande) return;
     setSaving(true);
-    const state = JSON.stringify({ bgColor, bgImage, elements });
-    await updateDemande(selectedDemande.id, { editeurState: state });
+    setSaveMsg('');
+    try {
+      const state = JSON.stringify({ bgColor, bgImage, elements });
+      const sizeBytes = new Blob([state]).size;
+      if (sizeBytes > 900000) {
+        setSaveMsg('Image trop volumineuse. Utilisez une image plus petite ou une couleur de fond.');
+        setSaving(false);
+        return;
+      }
+      await updateDemande(selectedDemande.id, { editeurState: state });
+      setSaveMsg('Enregistré !');
+      setTimeout(() => setSaveMsg(''), 3000);
+    } catch (err) {
+      setSaveMsg('Erreur : ' + err.message);
+    }
     setSaving(false);
-    alert('Modifications enregistrées !');
   }
 
   async function handleVideoUpload(videoFile) {
@@ -171,35 +187,21 @@ export default function EditeurPage() {
       alert('Fichier trop volumineux. Maximum 50MB.');
       return;
     }
-
     setPublishing(true);
     try {
       const { storage } = await import('../../lib/firebase');
       const { ref, uploadBytesResumable, getDownloadURL, deleteObject } = await import('firebase/storage');
-
       const storageRef = ref(storage, `videos/${Date.now()}_${videoFile.name}`);
-
       await new Promise((resolve, reject) => {
         const uploadTask = uploadBytesResumable(storageRef, videoFile);
-        uploadTask.on('state_changed',
-          snapshot => {
-            const progress = Math.round(snapshot.bytesTransferred / snapshot.totalBytes * 100);
-            console.log('Upload Firebase:', progress + '%');
-          },
-          reject,
-          resolve
-        );
+        uploadTask.on('state_changed', null, reject, resolve);
       });
-
       const downloadURL = await getDownloadURL(storageRef);
-
       const W = isPortrait ? 1080 : 1920;
       const H = isPortrait ? 1920 : 1080;
       const canvas = document.createElement('canvas');
-      canvas.width = W;
-      canvas.height = H;
+      canvas.width = W; canvas.height = H;
       const ctx = canvas.getContext('2d');
-
       if (bgImage) {
         const img = new Image();
         img.src = bgImage;
@@ -209,13 +211,10 @@ export default function EditeurPage() {
         ctx.fillStyle = bgColor;
         ctx.fillRect(0, 0, W, H);
       }
-
       for (const el of elements) {
         if (el.type === 'text') {
           ctx.fillStyle = el.color;
-          const weight = el.bold ? 'bold ' : '';
-          const style = el.italic ? 'italic ' : '';
-          ctx.font = `${style}${weight}${el.fontSize}px ${el.fontFamily}`;
+          ctx.font = `${el.italic ? 'italic ' : ''}${el.bold ? 'bold ' : ''}${el.fontSize}px ${el.fontFamily}`;
           ctx.fillText(el.text, Math.round(el.x), Math.round(el.y + el.fontSize));
         } else if (el.type === 'image') {
           const img = new Image();
@@ -224,29 +223,21 @@ export default function EditeurPage() {
           ctx.drawImage(img, Math.round(el.x), Math.round(el.y), Math.round(el.width), Math.round(el.height));
         }
       }
-
       const bgBase64 = canvas.toDataURL('image/png').split(',')[1];
       const videoZone = elements.find(el => el.type === 'video');
       const filename = selectedDemande.ibFilename || selectedDemande.nom.toLowerCase().replace(/\s+/g, '-') + '.mp4';
-
       const assembleRes = await fetch('/api/infobeamer/assemble-video', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          bgBase64,
-          videoURL: downloadURL,
-          videoX: Math.round(videoZone.x),
-          videoY: Math.round(videoZone.y),
-          videoW: Math.round(videoZone.width),
-          videoH: Math.round(videoZone.height),
-          orientation: isPortrait ? 'portrait' : 'paysage',
-          filename,
+          bgBase64, videoURL: downloadURL,
+          videoX: Math.round(videoZone.x), videoY: Math.round(videoZone.y),
+          videoW: Math.round(videoZone.width), videoH: Math.round(videoZone.height),
+          orientation: isPortrait ? 'portrait' : 'paysage', filename,
         }),
       });
       const assembleData = await assembleRes.json();
-
       try { await deleteObject(storageRef); } catch {}
-
       if (assembleData.success) {
         await updateDemande(selectedDemande.id, {
           ibAssetId: assembleData.assetId,
@@ -257,9 +248,7 @@ export default function EditeurPage() {
       } else {
         alert('Erreur assemblage : ' + assembleData.error);
       }
-
     } catch (err) {
-      console.error(err);
       alert('Erreur lors de la publication : ' + err.message);
     }
     setPublishing(false);
@@ -267,24 +256,19 @@ export default function EditeurPage() {
 
   async function handlePublish() {
     if (!selectedDemande) return;
-
     const hasVideoZone = elements.some(el => el.type === 'video');
     if (selectedDemande.type === 'Vid\u00e9o' && hasVideoZone) {
-      const state = JSON.stringify({ bgColor, bgImage, elements });
-      await updateDemande(selectedDemande.id, { editeurState: state });
+      await updateDemande(selectedDemande.id, { editeurState: JSON.stringify({ bgColor, bgImage, elements }) });
       document.getElementById('video-upload-input').click();
       return;
     }
-
     setPublishing(true);
     try {
       const W = isPortrait ? 1080 : 1920;
       const H = isPortrait ? 1920 : 1080;
       const canvas = document.createElement('canvas');
-      canvas.width = W;
-      canvas.height = H;
+      canvas.width = W; canvas.height = H;
       const ctx = canvas.getContext('2d');
-
       if (bgImage) {
         const img = new Image();
         img.src = bgImage;
@@ -294,13 +278,10 @@ export default function EditeurPage() {
         ctx.fillStyle = bgColor;
         ctx.fillRect(0, 0, W, H);
       }
-
       for (const el of elements) {
         if (el.type === 'text') {
           ctx.fillStyle = el.color;
-          const weight = el.bold ? 'bold ' : '';
-          const style = el.italic ? 'italic ' : '';
-          ctx.font = `${style}${weight}${el.fontSize}px ${el.fontFamily}`;
+          ctx.font = `${el.italic ? 'italic ' : ''}${el.bold ? 'bold ' : ''}${el.fontSize}px ${el.fontFamily}`;
           ctx.fillText(el.text, Math.round(el.x), Math.round(el.y + el.fontSize));
         } else if (el.type === 'image') {
           const img = new Image();
@@ -309,21 +290,14 @@ export default function EditeurPage() {
           ctx.drawImage(img, Math.round(el.x), Math.round(el.y), Math.round(el.width), Math.round(el.height));
         }
       }
-
       const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
       const filename = selectedDemande.ibFilename || selectedDemande.nom.toLowerCase().replace(/\s+/g, '-') + '.png';
-
       const formData = new FormData();
       formData.append('file', blob, filename);
       formData.append('orientation', isPortrait ? 'portrait' : 'paysage');
       formData.append('filename', filename);
-
-      const res = await fetch('/api/infobeamer/upload-rotated', {
-        method: 'POST',
-        body: formData,
-      });
+      const res = await fetch('/api/infobeamer/upload-rotated', { method: 'POST', body: formData });
       const data = await res.json();
-
       if (data.success) {
         await updateDemande(selectedDemande.id, {
           ibAssetId: data.assetId,
@@ -345,9 +319,7 @@ export default function EditeurPage() {
   const isVideoMode = selectedDemande?.type === 'Vid\u00e9o' && elements.some(el => el.type === 'video');
 
   if (loading) return (
-    <div style={{ padding: '40px', textAlign: 'center', color: '#A8A69F', fontSize: '12px' }}>
-      Chargement…
-    </div>
+    <div style={{ padding: '40px', textAlign: 'center', color: '#A8A69F', fontSize: '12px' }}>Chargement…</div>
   );
 
   return (
@@ -355,21 +327,11 @@ export default function EditeurPage() {
 
       <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
 
-      {/* Overlay publication vidéo */}
       {isVideoPublishing && (
-        <div style={{
-          position: 'fixed', inset: 0, background: 'rgba(0,0,0,.65)',
-          zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center',
-          backdropFilter: 'blur(4px)',
-        }}>
-          <div style={{
-            background: '#fff', borderRadius: '16px', padding: '40px 48px',
-            textAlign: 'center', maxWidth: '420px', boxShadow: '0 24px 80px rgba(0,0,0,.3)',
-          }}>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.65)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(4px)' }}>
+          <div style={{ background: '#fff', borderRadius: '16px', padding: '40px 48px', textAlign: 'center', maxWidth: '420px', boxShadow: '0 24px 80px rgba(0,0,0,.3)' }}>
             <div style={{ fontSize: '52px', marginBottom: '16px', display: 'inline-block', animation: 'spin 2s linear infinite' }}>⏳</div>
-            <div style={{ fontSize: '16px', fontWeight: '600', color: '#1A1916', marginBottom: '10px' }}>
-              Publication en cours…
-            </div>
+            <div style={{ fontSize: '16px', fontWeight: '600', color: '#1A1916', marginBottom: '10px' }}>Publication en cours…</div>
             <div style={{ fontSize: '12px', color: '#6B6860', lineHeight: 1.7 }}>
               Votre vidéo est en cours d'assemblage et de publication sur votre borne.<br />
               <strong style={{ color: '#C02B2B' }}>Ne fermez pas cette page</strong> avant la fin du processus.
@@ -378,44 +340,25 @@ export default function EditeurPage() {
         </div>
       )}
 
-      <input
-        id="video-upload-input"
-        type="file"
-        accept="video/mp4"
-        style={{ display: 'none' }}
-        onChange={e => {
-          const file = e.target.files[0];
-          if (file) handleVideoUpload(file);
-        }}
-      />
+      <input id="video-upload-input" type="file" accept="video/mp4" style={{ display: 'none' }}
+        onChange={e => { const f = e.target.files[0]; if (f) handleVideoUpload(f); e.target.value = ''; }} />
 
       {/* Panneau gauche */}
       <div style={{ background: '#fff', border: '1px solid #E4E2DC', borderRadius: '10px', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-        <div style={{ padding: '10px 12px', borderBottom: '1px solid #E4E2DC', fontSize: '12px', fontWeight: '600', color: '#1A1916' }}>
-          Communications
-        </div>
+        <div style={{ padding: '10px 12px', borderBottom: '1px solid #E4E2DC', fontSize: '12px', fontWeight: '600', color: '#1A1916' }}>Communications</div>
         <div style={{ flex: 1, overflowY: 'auto' }}>
           {demandes.length === 0 ? (
             <div style={{ padding: '20px', textAlign: 'center', color: '#A8A69F', fontSize: '11px' }}>Aucune communication approuvée</div>
           ) : demandes.map(d => (
-            <div
-              key={d.id}
-              onClick={() => selectDemande(d)}
-              style={{
-                padding: '10px 12px', borderBottom: '1px solid #E4E2DC', cursor: 'pointer',
-                background: selectedDemande?.id === d.id ? '#EBF0FD' : '#fff',
-              }}
+            <div key={d.id} onClick={() => selectDemande(d)}
+              style={{ padding: '10px 12px', borderBottom: '1px solid #E4E2DC', cursor: 'pointer', background: selectedDemande?.id === d.id ? '#EBF0FD' : '#fff' }}
               onMouseEnter={e => { if (selectedDemande?.id !== d.id) e.currentTarget.style.background = '#F7F6F3'; }}
               onMouseLeave={e => { if (selectedDemande?.id !== d.id) e.currentTarget.style.background = '#fff'; }}
             >
               <div style={{ fontSize: '12px', fontWeight: '500', color: '#1A1916' }}>{d.nom}</div>
               <div style={{ fontSize: '10px', color: '#A8A69F', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}>
                 {d.type}
-                {d.editeurState && (
-                  <span style={{ background: '#E6F5ED', color: '#18865A', padding: '1px 5px', borderRadius: '10px', fontSize: '9px' }}>
-                    Sauvegardé
-                  </span>
-                )}
+                {d.editeurState && <span style={{ background: '#E6F5ED', color: '#18865A', padding: '1px 5px', borderRadius: '10px', fontSize: '9px' }}>Sauvegardé</span>}
               </div>
             </div>
           ))}
@@ -427,17 +370,13 @@ export default function EditeurPage() {
 
         {/* Toolbar */}
         <div style={{ background: '#fff', border: '1px solid #E4E2DC', borderRadius: '10px', padding: '8px 12px', display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap', flexShrink: 0 }}>
-          <button onClick={addText} style={{ padding: '5px 10px', background: '#EBF0FD', color: '#2B5CE6', border: '1px solid #C5D8F8', borderRadius: '6px', fontSize: '11px', cursor: 'pointer', fontFamily: 'inherit', fontWeight: '500' }}>
-            + Texte
-          </button>
+          <button onClick={addText} style={{ padding: '5px 10px', background: '#EBF0FD', color: '#2B5CE6', border: '1px solid #C5D8F8', borderRadius: '6px', fontSize: '11px', cursor: 'pointer', fontFamily: 'inherit', fontWeight: '500' }}>+ Texte</button>
           <label style={{ padding: '5px 10px', background: '#E6F5ED', color: '#18865A', border: '1px solid #AADBC5', borderRadius: '6px', fontSize: '11px', cursor: 'pointer', fontWeight: '500' }}>
             🖼️ Image
             <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleImageElementUpload} />
           </label>
           {selectedDemande?.type === 'Vid\u00e9o' && (
-            <button onClick={addVideoZone} style={{ padding: '5px 10px', background: '#FDF3E3', color: '#9A5E0A', border: '1px solid #F0C070', borderRadius: '6px', fontSize: '11px', cursor: 'pointer', fontFamily: 'inherit', fontWeight: '500' }}>
-              🎬 Zone vidéo
-            </button>
+            <button onClick={addVideoZone} style={{ padding: '5px 10px', background: '#FDF3E3', color: '#9A5E0A', border: '1px solid #F0C070', borderRadius: '6px', fontSize: '11px', cursor: 'pointer', fontFamily: 'inherit', fontWeight: '500' }}>🎬 Zone vidéo</button>
           )}
           <div style={{ display: 'flex', alignItems: 'center', gap: '5px', borderLeft: '1px solid #E4E2DC', paddingLeft: '6px' }}>
             <span style={{ fontSize: '11px', color: '#6B6860' }}>Fond :</span>
@@ -446,11 +385,10 @@ export default function EditeurPage() {
               📷 Fond image
               <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleBgImageUpload} />
             </label>
-            {bgImage && (
-              <button onClick={() => setBgImage(null)} style={{ padding: '3px 6px', background: '#FCEAEA', color: '#C02B2B', border: 'none', borderRadius: '4px', fontSize: '11px', cursor: 'pointer' }}>✕</button>
-            )}
+            {bgImage && <button onClick={() => setBgImage(null)} style={{ padding: '3px 6px', background: '#FCEAEA', color: '#C02B2B', border: 'none', borderRadius: '4px', fontSize: '11px', cursor: 'pointer' }}>✕</button>}
           </div>
-          <div style={{ marginLeft: 'auto', display: 'flex', gap: '6px' }}>
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: '6px', alignItems: 'center' }}>
+            {saveMsg && <span style={{ fontSize: '11px', color: saveMsg.includes('Erreur') || saveMsg.includes('volumineux') ? '#C02B2B' : '#18865A' }}>{saveMsg}</span>}
             <button onClick={handleSave} disabled={!selectedDemande || saving} style={{ padding: '5px 12px', background: '#F7F6F3', color: '#6B6860', border: '1px solid #E4E2DC', borderRadius: '6px', fontSize: '11px', fontWeight: '500', cursor: selectedDemande ? 'pointer' : 'not-allowed', fontFamily: 'inherit' }}>
               {saving ? '⏳' : '💾 Enregistrer'}
             </button>
@@ -463,81 +401,28 @@ export default function EditeurPage() {
         {/* Preview */}
         <div style={{ flex: 1, overflow: 'auto', background: '#F7F6F3', border: '1px solid #E4E2DC', borderRadius: '10px', padding: '20px', display: 'flex', alignItems: 'flex-start', justifyContent: 'center' }}>
           {!selectedDemande ? (
-            <div style={{ textAlign: 'center', color: '#A8A69F', fontSize: '12px', alignSelf: 'center' }}>
-              ← Sélectionnez une communication pour commencer
-            </div>
+            <div style={{ textAlign: 'center', color: '#A8A69F', fontSize: '12px', alignSelf: 'center' }}>← Sélectionnez une communication pour commencer</div>
           ) : (
-            <div style={{
-              width: `${canvasW * SCALE}px`,
-              height: `${canvasH * SCALE}px`,
-              flexShrink: 0,
-              position: 'relative',
-            }}>
-              <div
-                ref={previewRef}
-                style={{
-                  width: `${canvasW}px`,
-                  height: `${canvasH}px`,
-                  background: bgImage ? `url(${bgImage}) center/cover no-repeat` : bgColor,
-                  position: 'absolute',
-                  top: 0, left: 0,
-                  transform: `scale(${SCALE})`,
-                  transformOrigin: 'top left',
-                  overflow: 'hidden',
-                  boxShadow: '0 4px 24px rgba(0,0,0,.2)',
-                  borderRadius: '3px',
-                }}
-                onClick={() => setSelectedEl(null)}
-              >
+            <div style={{ width: `${canvasW * SCALE}px`, height: `${canvasH * SCALE}px`, flexShrink: 0, position: 'relative' }}>
+              <div ref={previewRef} style={{
+                width: `${canvasW}px`, height: `${canvasH}px`,
+                background: bgImage ? `url(${bgImage}) center/cover no-repeat` : bgColor,
+                position: 'absolute', top: 0, left: 0,
+                transform: `scale(${SCALE})`, transformOrigin: 'top left',
+                overflow: 'hidden', boxShadow: '0 4px 24px rgba(0,0,0,.2)', borderRadius: '3px',
+              }} onClick={() => setSelectedEl(null)}>
                 {elements.map(el => (
-                  <div
-                    key={el.id}
+                  <div key={el.id}
                     onMouseDown={e => onMouseDown(e, el.id)}
                     onClick={e => { e.stopPropagation(); setSelectedEl(el.id); }}
-                    style={{
-                      position: 'absolute',
-                      left: `${el.x}px`,
-                      top: `${el.y}px`,
-                      cursor: 'move',
-                      userSelect: 'none',
-                      outline: selectedEl === el.id ? '4px dashed #2B5CE6' : '2px dashed transparent',
-                      padding: '4px',
-                      boxSizing: 'border-box',
-                    }}
+                    style={{ position: 'absolute', left: `${el.x}px`, top: `${el.y}px`, cursor: 'move', userSelect: 'none', outline: selectedEl === el.id ? '4px dashed #2B5CE6' : '2px dashed transparent', padding: '4px', boxSizing: 'border-box' }}
                   >
                     {el.type === 'text' ? (
-                      <span style={{
-                        fontSize: `${el.fontSize}px`,
-                        fontFamily: el.fontFamily,
-                        color: el.color,
-                        fontWeight: el.bold ? 'bold' : 'normal',
-                        fontStyle: el.italic ? 'italic' : 'normal',
-                        whiteSpace: 'pre-wrap',
-                        display: 'block',
-                      }}>
-                        {el.text}
-                      </span>
+                      <span style={{ fontSize: `${el.fontSize}px`, fontFamily: el.fontFamily, color: el.color, fontWeight: el.bold ? 'bold' : 'normal', fontStyle: el.italic ? 'italic' : 'normal', whiteSpace: 'pre-wrap', display: 'block' }}>{el.text}</span>
                     ) : el.type === 'image' ? (
-                      <img
-                        src={el.src}
-                        alt=""
-                        style={{
-                          width: `${el.width}px`,
-                          height: `${el.height}px`,
-                          display: 'block',
-                          pointerEvents: 'none',
-                        }}
-                      />
+                      <img src={el.src} alt="" style={{ width: `${el.width}px`, height: `${el.height}px`, display: 'block', pointerEvents: 'none' }} />
                     ) : el.type === 'video' ? (
-                      <div style={{
-                        width: `${el.width}px`,
-                        height: `${el.height}px`,
-                        background: 'rgba(0,0,0,0.6)',
-                        border: '6px dashed rgba(255,255,255,0.6)',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        flexDirection: 'column', gap: '16px',
-                        boxSizing: 'border-box',
-                      }}>
+                      <div style={{ width: `${el.width}px`, height: `${el.height}px`, background: 'rgba(0,0,0,0.6)', border: '6px dashed rgba(255,255,255,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '16px', boxSizing: 'border-box' }}>
                         <span style={{ fontSize: '80px' }}>🎬</span>
                         <span style={{ fontSize: '36px', color: '#fff', fontFamily: 'Arial', fontWeight: '600' }}>Zone vidéo</span>
                         <span style={{ fontSize: '28px', color: 'rgba(255,255,255,.6)', fontFamily: 'Arial' }}>{el.width} × {el.height}px</span>
@@ -553,23 +438,15 @@ export default function EditeurPage() {
 
       {/* Panneau droit */}
       <div style={{ background: '#fff', border: '1px solid #E4E2DC', borderRadius: '10px', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-        <div style={{ padding: '10px 12px', borderBottom: '1px solid #E4E2DC', fontSize: '12px', fontWeight: '600', color: '#1A1916' }}>
-          Propriétés
-        </div>
+        <div style={{ padding: '10px 12px', borderBottom: '1px solid #E4E2DC', fontSize: '12px', fontWeight: '600', color: '#1A1916' }}>Propriétés</div>
         <div style={{ flex: 1, overflowY: 'auto', padding: '12px' }}>
           {!selectedElement ? (
-            <div style={{ textAlign: 'center', color: '#A8A69F', fontSize: '11px', marginTop: '20px' }}>
-              Cliquez sur un élément pour le modifier
-            </div>
+            <div style={{ textAlign: 'center', color: '#A8A69F', fontSize: '11px', marginTop: '20px' }}>Cliquez sur un élément pour le modifier</div>
           ) : selectedElement.type === 'text' ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               <div>
                 <div style={{ fontSize: '10px', color: '#6B6860', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: '4px' }}>Texte</div>
-                <textarea
-                  value={selectedElement.text}
-                  onChange={e => updateElement(selectedElement.id, { text: e.target.value })}
-                  style={{ width: '100%', padding: '6px 8px', fontSize: '12px', border: '1px solid #CCC9C0', borderRadius: '6px', fontFamily: 'inherit', color: '#1A1916', resize: 'vertical', minHeight: '60px', boxSizing: 'border-box' }}
-                />
+                <textarea value={selectedElement.text} onChange={e => updateElement(selectedElement.id, { text: e.target.value })} style={{ width: '100%', padding: '6px 8px', fontSize: '12px', border: '1px solid #CCC9C0', borderRadius: '6px', fontFamily: 'inherit', color: '#1A1916', resize: 'vertical', minHeight: '60px', boxSizing: 'border-box' }} />
               </div>
               <div>
                 <div style={{ fontSize: '10px', color: '#6B6860', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: '4px' }}>Police</div>
@@ -605,17 +482,14 @@ export default function EditeurPage() {
                 <div style={{ fontSize: '10px', color: '#6B6860', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: '4px' }}>Largeur : {selectedElement.width}px</div>
                 <input type="range" min="100" max={canvasW} value={selectedElement.width} onChange={e => {
                   const w = parseInt(e.target.value);
-                  const h = Math.round(w / RATIO);
-                  updateElement(selectedElement.id, { width: w, height: h });
+                  updateElement(selectedElement.id, { width: w, height: Math.round(w / RATIO) });
                 }} style={{ width: '100%' }} />
               </div>
               <div>
                 <div style={{ fontSize: '10px', color: '#6B6860', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: '4px' }}>Hauteur : {selectedElement.height}px (auto)</div>
                 <div style={{ fontSize: '10px', color: '#A8A69F' }}>Ratio 16:9 maintenu automatiquement</div>
               </div>
-              <button onClick={() => removeElement(selectedElement.id)} style={{ padding: '6px', background: '#FCEAEA', color: '#C02B2B', border: '1px solid #EABABA', borderRadius: '6px', fontSize: '11px', cursor: 'pointer' }}>
-                🗑️ Supprimer
-              </button>
+              <button onClick={() => removeElement(selectedElement.id)} style={{ padding: '6px', background: '#FCEAEA', color: '#C02B2B', border: '1px solid #EABABA', borderRadius: '6px', fontSize: '11px', cursor: 'pointer' }}>🗑️ Supprimer</button>
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
@@ -627,9 +501,7 @@ export default function EditeurPage() {
                 <div style={{ fontSize: '10px', color: '#6B6860', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: '4px' }}>Hauteur : {selectedElement.height}px</div>
                 <input type="range" min="20" max={canvasH} value={selectedElement.height} onChange={e => updateElement(selectedElement.id, { height: parseInt(e.target.value) })} style={{ width: '100%' }} />
               </div>
-              <button onClick={() => removeElement(selectedElement.id)} style={{ padding: '6px', background: '#FCEAEA', color: '#C02B2B', border: '1px solid #EABABA', borderRadius: '6px', fontSize: '11px', cursor: 'pointer' }}>
-                🗑️ Supprimer
-              </button>
+              <button onClick={() => removeElement(selectedElement.id)} style={{ padding: '6px', background: '#FCEAEA', color: '#C02B2B', border: '1px solid #EABABA', borderRadius: '6px', fontSize: '11px', cursor: 'pointer' }}>🗑️ Supprimer</button>
             </div>
           )}
         </div>
