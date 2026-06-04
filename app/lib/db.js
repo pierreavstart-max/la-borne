@@ -116,3 +116,20 @@ export async function getDemandesArchivees() {
     .map(d => ({id: d.id, ...d.data()}))
     .filter(d => d.archived === true);
 }
+
+export async function getFaq() {
+  const snap = await getDocs(query(collection(db, 'faq'), orderBy('ordre', 'asc')));
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+export async function addFaqItem(data) {
+  return await addDoc(collection(db, 'faq'), { ...data, createdAt: serverTimestamp() });
+}
+
+export async function updateFaqItem(id, data) {
+  await updateDoc(doc(db, 'faq', id), data);
+}
+
+export async function deleteFaqItem(id) {
+  await deleteDoc(doc(db, 'faq', id));
+}
