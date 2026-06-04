@@ -429,7 +429,7 @@ export default function EditeurPage() {
               {saving ? '⏳' : '💾 Enregistrer'}
             </button>
             <button onClick={handlePublish} disabled={!selectedDemande || publishing} style={{ padding: '5px 14px', background: selectedDemande ? '#2B5CE6' : '#E4E2DC', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '11px', fontWeight: '600', cursor: selectedDemande ? 'pointer' : 'not-allowed', fontFamily: 'inherit' }}>
-              {publishing ? '⏳ Publication…' : '🚀 Publier'}
+              {publishing ? '⏳ Publication…' : (selectedDemande?.type === 'Vid\u00e9o' && elements.some(el => el.type === 'video') ? '🚀 Ajouter la vidéo et Publier' : '🚀 Publier')}
             </button>
           </div>
         </div>
