@@ -41,7 +41,6 @@ export default function ClientLayout({ children }) {
   const navItems = [
     { label: 'Tableau de bord', href: '/client' },
     { label: 'Mes bornes',      href: '/client/bornes' },
-    { label: 'Ma bibliothèque', href: '/client/bibliotheque' },
     { label: 'Mes demandes',    href: '/client/demandes' },
     { label: 'Mon profil',      href: '/client/profil' },
     { label: 'Éditeur', href: '/client/editeur' },
