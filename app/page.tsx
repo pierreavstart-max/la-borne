@@ -15,7 +15,7 @@ export default function LoginPage() {
   const [resetMsg, setResetMsg] = useState('');
   const [resetLoading, setResetLoading] = useState(false);
 
-  async function handleLogin(e) {
+  async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
     setError('');
     setLoading(true);
@@ -34,7 +34,7 @@ export default function LoginPage() {
     setLoading(false);
   }
 
-  async function handleReset(e) {
+  async function handleReset(e: React.FormEvent) {
     e.preventDefault();
     if (!resetEmail) return;
     setResetLoading(true);
