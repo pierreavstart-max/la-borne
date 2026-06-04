@@ -30,19 +30,43 @@ export default function DemandesClientPage() {
   }
 
   async function soumettre() {
-    if (!type || !nom) return;
-    setSaving(true);
-    const email = localStorage.getItem('clientEmail');
-    await addDemande({
-      clientEmail: email,
-      clientNom: email,
-      nom, type, description,
-    });
-    setType(''); setNom(''); setDescription('');
-    setShowForm(false);
-    await loadDemandes();
-    setSaving(false);
-  }
+  if (!type || !nom) return;
+  setSaving(true);
+  const email = localStorage.getItem('clientEmail');
+  await addDemande({
+    clientEmail: email,
+    clientNom: email,
+    nom, type, description,
+  });
+
+  // Envoie un email de notification
+  await fetch('/api/send-email', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      subject: `Nouvelle demande — ${nom}`,
+      html: `
+        <div style="font-family: sans-serif; max-width: 500px;">
+          <h2 style="color: #1A1916;">Nouvelle demande reçue</h2>
+          <table style="width:100%; border-collapse: collapse;">
+            <tr><td style="padding: 8px 0; color: #6B6860; font-size: 13px;">Client</td><td style="padding: 8px 0; font-size: 13px;">${email}</td></tr>
+            <tr><td style="padding: 8px 0; color: #6B6860; font-size: 13px;">Communication</td><td style="padding: 8px 0; font-size: 13px;">${nom}</td></tr>
+            <tr><td style="padding: 8px 0; color: #6B6860; font-size: 13px;">Type</td><td style="padding: 8px 0; font-size: 13px;">${type}</td></tr>
+            <tr><td style="padding: 8px 0; color: #6B6860; font-size: 13px;">Description</td><td style="padding: 8px 0; font-size: 13px;">${description || '—'}</td></tr>
+          </table>
+          <a href="https://app.la-borne.fr/admin/demandes" style="display:inline-block; margin-top:16px; padding: 10px 20px; background: #2B5CE6; color: #fff; text-decoration: none; border-radius: 6px; font-size: 13px;">
+            Voir la demande →
+          </a>
+        </div>
+      `,
+    }),
+  });
+
+  setType(''); setNom(''); setDescription('');
+  setShowForm(false);
+  await loadDemandes();
+  setSaving(false);
+}
 
   async function handleArchive(id) {
     await archiverDemande(id);
