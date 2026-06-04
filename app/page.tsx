@@ -22,8 +22,8 @@ export default function LoginPage() {
     try {
       const result = await signInWithEmailAndPassword(auth, email, password);
       const user = result.user;
-      localStorage.setItem('clientEmail', user.email);
-      if (ADMIN_EMAILS.includes(user.email)) {
+      localStorage.setItem('clientEmail', user.email || '');
+      if (ADMIN_EMAILS.includes(user.email || '')) {
         window.location.href = '/admin';
       } else {
         window.location.href = '/client';
@@ -43,7 +43,7 @@ export default function LoginPage() {
       await sendPasswordResetEmail(auth, resetEmail);
       setResetMsg('Un email de réinitialisation a été envoyé. Vérifiez votre boîte mail.');
     } catch (err) {
-      setResetMsg('Adresse email introuvable ou erreur. Vérifiez l\'adresse saisie.');
+      setResetMsg("Adresse email introuvable ou erreur. Vérifiez l'adresse saisie.");
     }
     setResetLoading(false);
   }
@@ -51,7 +51,7 @@ export default function LoginPage() {
   const inputStyle = {
     width: '100%', padding: '10px 12px', fontSize: '13px',
     border: '1px solid #CCC9C0', borderRadius: '7px',
-    fontFamily: 'inherit', color: '#1A1916', boxSizing: 'border-box',
+    fontFamily: 'inherit', color: '#1A1916', boxSizing: 'border-box' as const,
     outline: 'none',
   };
 
@@ -78,7 +78,6 @@ export default function LoginPage() {
         </div>
 
         {!resetMode ? (
-          /* Formulaire connexion */
           <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             <div>
               <label style={{ fontSize: '11px', fontWeight: '600', color: '#6B6860', textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: '5px', display: 'block' }}>Email</label>
@@ -118,7 +117,6 @@ export default function LoginPage() {
             </button>
           </form>
         ) : (
-          /* Formulaire reset */
           <form onSubmit={handleReset} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             <p style={{ fontSize: '12px', color: '#6B6860', lineHeight: 1.6, margin: 0 }}>
               Saisissez votre adresse email. Vous recevrez un lien pour réinitialiser votre mot de passe.
