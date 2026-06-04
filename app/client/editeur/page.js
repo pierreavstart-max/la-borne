@@ -192,7 +192,6 @@ export default function EditeurPage() {
       });
 
       const downloadURL = await getDownloadURL(storageRef);
-      console.log('Firebase URL:', downloadURL);
 
       const W = isPortrait ? 1080 : 1920;
       const H = isPortrait ? 1920 : 1080;
@@ -342,6 +341,8 @@ export default function EditeurPage() {
   }
 
   const selectedElement = elements.find(el => el.id === selectedEl);
+  const isVideoPublishing = publishing && selectedDemande?.type === 'Vid\u00e9o';
+  const isVideoMode = selectedDemande?.type === 'Vid\u00e9o' && elements.some(el => el.type === 'video');
 
   if (loading) return (
     <div style={{ padding: '40px', textAlign: 'center', color: '#A8A69F', fontSize: '12px' }}>
@@ -351,6 +352,31 @@ export default function EditeurPage() {
 
   return (
     <div style={{ padding: '16px', display: 'grid', gridTemplateColumns: '200px 1fr 240px', gap: '12px', height: 'calc(100vh - 32px)' }}>
+
+      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+
+      {/* Overlay publication vidéo */}
+      {isVideoPublishing && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,.65)',
+          zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          backdropFilter: 'blur(4px)',
+        }}>
+          <div style={{
+            background: '#fff', borderRadius: '16px', padding: '40px 48px',
+            textAlign: 'center', maxWidth: '420px', boxShadow: '0 24px 80px rgba(0,0,0,.3)',
+          }}>
+            <div style={{ fontSize: '52px', marginBottom: '16px', display: 'inline-block', animation: 'spin 2s linear infinite' }}>⏳</div>
+            <div style={{ fontSize: '16px', fontWeight: '600', color: '#1A1916', marginBottom: '10px' }}>
+              Publication en cours…
+            </div>
+            <div style={{ fontSize: '12px', color: '#6B6860', lineHeight: 1.7 }}>
+              Votre vidéo est en cours d'assemblage et de publication sur votre borne.<br />
+              <strong style={{ color: '#C02B2B' }}>Ne fermez pas cette page</strong> avant la fin du processus.
+            </div>
+          </div>
+        </div>
+      )}
 
       <input
         id="video-upload-input"
@@ -428,8 +454,8 @@ export default function EditeurPage() {
             <button onClick={handleSave} disabled={!selectedDemande || saving} style={{ padding: '5px 12px', background: '#F7F6F3', color: '#6B6860', border: '1px solid #E4E2DC', borderRadius: '6px', fontSize: '11px', fontWeight: '500', cursor: selectedDemande ? 'pointer' : 'not-allowed', fontFamily: 'inherit' }}>
               {saving ? '⏳' : '💾 Enregistrer'}
             </button>
-            <button onClick={handlePublish} disabled={!selectedDemande || publishing} style={{ padding: '5px 14px', background: selectedDemande ? '#2B5CE6' : '#E4E2DC', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '11px', fontWeight: '600', cursor: selectedDemande ? 'pointer' : 'not-allowed', fontFamily: 'inherit' }}>
-              {publishing ? '⏳ Publication…' : (selectedDemande?.type === 'Vid\u00e9o' && elements.some(el => el.type === 'video') ? '🚀 Ajouter la vidéo et Publier' : '🚀 Publier')}
+            <button onClick={handlePublish} disabled={!selectedDemande || publishing} style={{ padding: '5px 14px', background: selectedDemande ? '#2B5CE6' : '#E4E2DC', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '11px', fontWeight: '600', cursor: selectedDemande ? 'pointer' : 'not-allowed', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+              {publishing ? '⏳ Publication…' : isVideoMode ? '🚀 Ajouter la vidéo et Publier' : '🚀 Publier'}
             </button>
           </div>
         </div>
