@@ -133,7 +133,3 @@ export async function updateFaqItem(id, data) {
 export async function deleteFaqItem(id) {
   await deleteDoc(doc(db, 'faq', id));
 }
-
-export async function updateBorne(id, data) {
-  await updateDoc(doc(db, 'bornes', id), data);
-}
