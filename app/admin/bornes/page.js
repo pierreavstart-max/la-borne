@@ -11,6 +11,7 @@ export default function BornesPage() {
   const [showForm, setShowForm] = useState(false);
   const [editingBorne, setEditingBorne] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [storageFiles, setStorageFiles] = useState([]);
 
   const [nom, setNom] = useState('');
   const [adresse, setAdresse] = useState('');
@@ -36,6 +37,17 @@ export default function BornesPage() {
     }
     load();
   }, []);
+
+  async function loadStorageFiles() {
+    if (storageFiles.length > 0) return;
+    try {
+      const res = await fetch('/api/storage/list');
+      const data = await res.json();
+      setStorageFiles(data.files || []);
+    } catch (err) {
+      console.error('Error loading storage files:', err);
+    }
+  }
 
   async function loadBornes() {
     const data = await getBornes();
@@ -70,6 +82,7 @@ export default function BornesPage() {
     setIbMeteoFilename(borne.ibMeteoFilename || '');
     setIbMeteoStorageUrl(borne.ibMeteoStorageUrl || '');
     setShowForm(true);
+    loadStorageFiles();
   }
 
   async function handleSubmit(e) {
@@ -205,7 +218,10 @@ export default function BornesPage() {
                   type="checkbox"
                   id="isMeteoBorne"
                   checked={isMeteoBorne}
-                  onChange={e => setIsMeteoBorne(e.target.checked)}
+                  onChange={e => {
+                    setIsMeteoBorne(e.target.checked);
+                    if (e.target.checked) loadStorageFiles();
+                  }}
                   style={{ cursor: 'pointer' }}
                 />
                 <label htmlFor="isMeteoBorne" style={{ fontSize: '12px', fontWeight: '600', color: '#1A1916', cursor: 'pointer' }}>
@@ -234,16 +250,27 @@ export default function BornesPage() {
                     />
                   </div>
                   <div style={{ gridColumn: '1 / -1' }}>
-                    <label style={labelStyle}>URL Firebase Storage — vidéo de fond</label>
-                    <input
+                    <label style={labelStyle}>Vidéo de fond météo</label>
+                    <select
                       value={ibMeteoStorageUrl}
                       onChange={e => setIbMeteoStorageUrl(e.target.value)}
-                      placeholder="https://firebasestorage.googleapis.com/..."
                       style={inputStyle}
-                    />
-                    <div style={{ fontSize: '10px', color: '#A8A69F', marginTop: '4px' }}>
-                      URL publique de la vidéo de fond depuis Firebase Storage
-                    </div>
+                    >
+                      <option value="">— Choisir une vidéo</option>
+                      {storageFiles.map(f => (
+                        <option key={f.url} value={f.url}>{f.name}</option>
+                      ))}
+                    </select>
+                    {ibMeteoStorageUrl && (
+                      <div style={{ fontSize: '10px', color: '#18865A', marginTop: '4px' }}>
+                        ✓ Vidéo sélectionnée
+                      </div>
+                    )}
+                    {storageFiles.length === 0 && (
+                      <div style={{ fontSize: '10px', color: '#A8A69F', marginTop: '4px' }}>
+                        Chargement des vidéos…
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
