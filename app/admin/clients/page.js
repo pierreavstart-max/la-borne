@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { getClients, addClient, deleteClient, updateClient, getRoles } from '../../lib/db';
+import { getClients, addClient, deleteClient, updateClient, getRoles, } from '../../lib/db';
 
 export default function ClientsPage() {
   const [clients, setClients] = useState([]);

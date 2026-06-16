@@ -1,13 +1,13 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { getNotifications, deleteNotification, getMessages, getBornes, getDemandesClient, getFaq } from '../lib/db';
+import { getNotifications, deleteNotification, getMessages, getBornes, getDemandesClient, getFaq, getClients } from '../lib/db';
 
 export default function ClientDashboard() {
   const [notifications, setNotifications] = useState([]);
   const [messages, setMessages] = useState([]);
   const [stats, setStats] = useState({ bornes: 0, comms: 0, enAttente: 0 });
   const [faqItems, setFaqItems] = useState([]);
-const [openFaq, setOpenFaq] = useState(null);
+  const [openFaq, setOpenFaq] = useState(null);
 
   useEffect(() => {
     const email = localStorage.getItem('clientEmail');
@@ -17,9 +17,18 @@ const [openFaq, setOpenFaq] = useState(null);
 
     getNotifications(email).then(notifs => setNotifications(notifs));
 
-    getMessages().then(msgs => {
+    Promise.all([getMessages(), getClients()]).then(([msgs, allClients]) => {
+      const currentClient = allClients.find(c => c.email === email);
+      const clientRoles = currentClient?.roles && currentClient.roles.length > 0
+        ? currentClient.roles
+        : (currentClient?.role ? [currentClient.role] : []);
+
       const filtered = msgs
-        .filter(m => m.destType === 'tous' || (m.destType === 'client' && m.dest === email))
+        .filter(m =>
+          m.destType === 'tous' ||
+          (m.destType === 'client' && m.dest === email) ||
+          (m.destType === 'role' && clientRoles.includes(m.dest))
+        )
         .sort((a, b) => {
           const dateA = a.createdAt?.toDate?.() || new Date(0);
           const dateB = b.createdAt?.toDate?.() || new Date(0);
@@ -28,7 +37,6 @@ const [openFaq, setOpenFaq] = useState(null);
       setMessages(filtered);
     });
 
-    // Vraies stats
     Promise.all([getBornes(), getDemandesClient(email)]).then(([allBornes, demandes]) => {
       const clientBornes = allBornes.filter(b => b.clientEmail === email);
       const approuvees = demandes.filter(d => d.statut === 'Approuvée' && !d.archived);
@@ -63,7 +71,6 @@ const [openFaq, setOpenFaq] = useState(null);
           </div>
           <div style={{ padding: '16px' }}>
 
-            {/* Notifications */}
             {notifications.map(n => (
               <div key={n.id} style={{
                 padding: '10px 12px',
@@ -90,7 +97,6 @@ const [openFaq, setOpenFaq] = useState(null);
               </div>
             ))}
 
-            {/* Messages admin */}
             {messages.map(m => (
               <div key={m.id} style={{
                 padding: '10px 12px', background: '#EBF0FD',
@@ -109,7 +115,6 @@ const [openFaq, setOpenFaq] = useState(null);
               Depuis cet espace, gérez les visuels affichés sur vos bornes.
             </p>
 
-            {/* Stats */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '6px', marginTop: '10px' }}>
               {statCards.map(s => (
                 <div key={s.label} style={{ background: '#F7F6F3', border: '1px solid #E4E2DC', borderRadius: '8px', padding: '9px 11px' }}>
@@ -127,33 +132,33 @@ const [openFaq, setOpenFaq] = useState(null);
         </div>
 
         {/* Mode d'emploi */}
-<div style={{ background: '#fff', border: '1px solid #E4E2DC', borderRadius: '10px', overflow: 'hidden' }}>
-  <div style={{ padding: '14px 16px', borderBottom: '1px solid #E4E2DC', fontSize: '13px', fontWeight: '600', color: '#1A1916' }}>
-    ❓ Mode d'emploi
-  </div>
-  <div style={{ padding: '4px 16px' }}>
-    {faqItems.length === 0 ? (
-      <div style={{ padding: '20px 0', textAlign: 'center', color: '#A8A69F', fontSize: '11px' }}>
-        Aucune entrée disponible
-      </div>
-    ) : faqItems.map(item => (
-      <div key={item.id}>
-        <div
-          onClick={() => setOpenFaq(openFaq === item.id ? null : item.id)}
-          style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #E4E2DC', cursor: 'pointer' }}
-        >
-          <span style={{ fontSize: '11px', color: '#2B5CE6', fontWeight: '500' }}>{item.question}</span>
-          <span style={{ color: '#A8A69F', fontSize: '12px', transition: 'transform .2s', transform: openFaq === item.id ? 'rotate(90deg)' : 'none' }}>›</span>
-        </div>
-        {openFaq === item.id && (
-          <div style={{ padding: '10px 0 12px', fontSize: '11px', color: '#6B6860', lineHeight: 1.6, borderBottom: '1px solid #E4E2DC' }}>
-            {item.reponse}
+        <div style={{ background: '#fff', border: '1px solid #E4E2DC', borderRadius: '10px', overflow: 'hidden' }}>
+          <div style={{ padding: '14px 16px', borderBottom: '1px solid #E4E2DC', fontSize: '13px', fontWeight: '600', color: '#1A1916' }}>
+            ❓ Mode d'emploi
           </div>
-        )}
-      </div>
-    ))}
-  </div>
-</div>
+          <div style={{ padding: '4px 16px' }}>
+            {faqItems.length === 0 ? (
+              <div style={{ padding: '20px 0', textAlign: 'center', color: '#A8A69F', fontSize: '11px' }}>
+                Aucune entrée disponible
+              </div>
+            ) : faqItems.map(item => (
+              <div key={item.id}>
+                <div
+                  onClick={() => setOpenFaq(openFaq === item.id ? null : item.id)}
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #E4E2DC', cursor: 'pointer' }}
+                >
+                  <span style={{ fontSize: '11px', color: '#2B5CE6', fontWeight: '500' }}>{item.question}</span>
+                  <span style={{ color: '#A8A69F', fontSize: '12px', transition: 'transform .2s', transform: openFaq === item.id ? 'rotate(90deg)' : 'none' }}>›</span>
+                </div>
+                {openFaq === item.id && (
+                  <div style={{ padding: '10px 0 12px', fontSize: '11px', color: '#6B6860', lineHeight: 1.6, borderBottom: '1px solid #E4E2DC' }}>
+                    {item.reponse}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
 
       </div>
     </div>
