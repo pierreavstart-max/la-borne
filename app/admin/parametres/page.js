@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import { auth } from '../../lib/firebase';
 import { updatePassword } from 'firebase/auth';
-import { getMessages, addMessage, deleteMessage, getFaq, addFaqItem, updateFaqItem, deleteFaqItem } from '../../lib/db';
+import { getMessages, addMessage, deleteMessage, getFaq, addFaqItem, updateFaqItem, deleteFaqItem, getRoles, addRole, deleteRole, getClients } from '../../lib/db';
 
 export default function ParametresPage() {
   const [currentPassword, setCurrentPassword] = useState('');
@@ -21,9 +21,15 @@ export default function ParametresPage() {
   const [faqReponse, setFaqReponse] = useState('');
   const [editingFaq, setEditingFaq] = useState(null);
 
+  const [roles, setRoles] = useState([]);
+const [clients, setClients] = useState([]);
+const [newRole, setNewRole] = useState('');
+
   useEffect(() => {
     loadMessages();
     loadFaq();
+    loadRoles();
+getClients().then(setClients);
   }, []);
 
   async function loadMessages() {
@@ -71,6 +77,24 @@ export default function ParametresPage() {
     setFaqQuestion(''); setFaqReponse('');
     await loadFaq();
   }
+
+  async function loadRoles() {
+  const data = await getRoles();
+  setRoles(data);
+}
+
+async function handleAddRole() {
+  if (!newRole.trim()) return;
+  await addRole({ nom: newRole.trim() });
+  setNewRole('');
+  await loadRoles();
+}
+
+async function handleDeleteRole(id) {
+  if (!confirm('Supprimer ce rôle ?')) return;
+  await deleteRole(id);
+  await loadRoles();
+}
 
   function startEditFaq(item) {
     setEditingFaq(item.id);

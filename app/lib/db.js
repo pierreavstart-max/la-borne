@@ -133,3 +133,16 @@ export async function updateFaqItem(id, data) {
 export async function deleteFaqItem(id) {
   await deleteDoc(doc(db, 'faq', id));
 }
+
+export async function getRoles() {
+  const snap = await getDocs(query(collection(db, 'roles'), orderBy('nom', 'asc')));
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+export async function addRole(data) {
+  return await addDoc(collection(db, 'roles'), { ...data, createdAt: serverTimestamp() });
+}
+
+export async function deleteRole(id) {
+  await deleteDoc(doc(db, 'roles', id));
+}
