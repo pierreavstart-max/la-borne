@@ -248,47 +248,6 @@ export default function ParametresPage() {
         </div>
       </div>
 
-{/* Rôles clients */}
-      <div style={{ background: '#fff', border: '1px solid #E4E2DC', borderRadius: '10px', overflow: 'hidden', gridColumn: '1 / -1' }}>
-        <div style={{ padding: '14px 16px', borderBottom: '1px solid #E4E2DC', fontSize: '13px', fontWeight: '600', color: '#1A1916' }}>
-          Rôles clients
-        </div>
-        <div style={{ padding: '16px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            <div style={{ fontSize: '12px', fontWeight: '500', color: '#1A1916', marginBottom: '4px' }}>
-              Ajouter un rôle
-            </div>
-            <div>
-              <label style={labelStyle}>Nom du rôle</label>
-              <input
-                value={newRole}
-                onChange={e => setNewRole(e.target.value)}
-                placeholder="Ex : Directeur, Animateur, Cuisinier"
-                style={inputStyle}
-              />
-            </div>
-            <button onClick={handleAddRole} disabled={!newRole.trim()} style={{ padding: '8px', background: newRole.trim() ? '#2B5CE6' : '#E4E2DC', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: '600', cursor: newRole.trim() ? 'pointer' : 'not-allowed', fontFamily: 'inherit' }}>
-              + Ajouter
-            </button>
-          </div>
-          <div>
-            <div style={{ fontSize: '12px', fontWeight: '500', color: '#1A1916', marginBottom: '10px' }}>
-              {roles.length} rôle{roles.length > 1 ? 's' : ''}
-            </div>
-            {roles.length === 0 ? (
-              <div style={{ padding: '20px', textAlign: 'center', color: '#A8A69F', fontSize: '11px', background: '#F7F6F3', borderRadius: '6px' }}>
-                Aucun rôle défini
-              </div>
-            ) : roles.map(r => (
-              <div key={r.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: '#F7F6F3', borderRadius: '6px', marginBottom: '6px' }}>
-                <span style={{ fontSize: '12px', fontWeight: '500', color: '#1A1916' }}>{r.nom}</span>
-                <button onClick={() => handleDeleteRole(r.id)} style={{ background: '#FCEAEA', border: 'none', borderRadius: '4px', padding: '3px 8px', cursor: 'pointer', fontSize: '11px', color: '#C02B2B' }}>🗑️</button>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
       {/* FAQ Mode d'emploi */}
       <div style={{ background: '#fff', border: '1px solid #E4E2DC', borderRadius: '10px', overflow: 'hidden', gridColumn: '1 / -1' }}>
         <div style={{ padding: '14px 16px', borderBottom: '1px solid #E4E2DC', fontSize: '13px', fontWeight: '600', color: '#1A1916' }}>
