@@ -17,6 +17,9 @@ export default function BornesClientPage() {
   const [deleting, setDeleting] = useState(null);
   const [uploading, setUploading] = useState(null);
   const [editingComm, setEditingComm] = useState(null);
+  const [renamingComm, setRenamingComm] = useState(null);
+  const [newName, setNewName] = useState('');
+  const [renaming, setRenaming] = useState(null);
   const fileRef = useRef(null);
 
   useEffect(() => {
@@ -86,6 +89,26 @@ export default function BornesClientPage() {
     }
     setUploading(null);
     setEditingComm(null);
+  }
+
+  async function handleRename(demande) {
+    if (!newName.trim() || newName.trim() === demande.nom) {
+      setRenamingComm(null);
+      setNewName('');
+      return;
+    }
+    setRenaming(demande.id);
+    try {
+      await updateDemande(demande.id, { nom: newName.trim() });
+      const email = localStorage.getItem('clientEmail');
+      const clientDemandes = await getDemandesClient(email);
+      setDemandes(clientDemandes);
+      setRenamingComm(null);
+      setNewName('');
+    } catch (err) {
+      alert('Erreur lors du renommage.');
+    }
+    setRenaming(null);
   }
 
   if (loading) return (
@@ -165,6 +188,7 @@ export default function BornesClientPage() {
         ) : borneComms.map(c => {
           const st = statutStyle(c.statut);
           const isEditing = editingComm === c.id;
+          const isRenaming = renamingComm === c.id;
           const thumbHeight = isPortrait ? '200px' : '100px';
           return (
             <div key={c.id} style={{ background: '#fff', border: '1px solid #E4E2DC', borderRadius: '10px', overflow: 'hidden' }}>
@@ -190,7 +214,6 @@ export default function BornesClientPage() {
               >
                 {c.ibThumb ? (
                   isPortrait ? (
-                    // Pour portrait : le thumb est en 1920x1080, on le pivote -90° pour afficher en portrait
                     <div style={{
                       width: '100%',
                       height: '100%',
@@ -272,7 +295,43 @@ export default function BornesClientPage() {
 
               {/* Footer */}
               <div style={{ padding: '9px 12px', borderTop: '1px solid #E4E2DC' }}>
-                <div style={{ fontSize: '12px', fontWeight: '500', color: '#1A1916', marginBottom: '3px' }}>{c.nom}</div>
+                {isRenaming ? (
+                  <div style={{ display: 'flex', gap: '4px', marginBottom: '6px' }}>
+                    <input
+                      type="text"
+                      value={newName}
+                      onChange={e => setNewName(e.target.value)}
+                      autoFocus
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') handleRename(c);
+                        if (e.key === 'Escape') { setRenamingComm(null); setNewName(''); }
+                      }}
+                      style={{ flex: 1, padding: '4px 8px', fontSize: '12px', border: '1px solid #2B5CE6', borderRadius: '4px', fontFamily: 'inherit', color: '#1A1916' }}
+                    />
+                    <button
+                      onClick={() => handleRename(c)}
+                      disabled={renaming === c.id}
+                      style={{ padding: '4px 8px', background: '#2B5CE6', color: '#fff', border: 'none', borderRadius: '4px', fontSize: '11px', cursor: 'pointer', fontFamily: 'inherit' }}
+                    >
+                      {renaming === c.id ? '⏳' : '✓'}
+                    </button>
+                    <button
+                      onClick={() => { setRenamingComm(null); setNewName(''); }}
+                      style={{ padding: '4px 8px', background: '#F7F6F3', color: '#6B6860', border: '1px solid #E4E2DC', borderRadius: '4px', fontSize: '11px', cursor: 'pointer', fontFamily: 'inherit' }}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ) : (
+                  <div
+                    style={{ fontSize: '12px', fontWeight: '500', color: '#1A1916', marginBottom: '3px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+                    onClick={() => { setRenamingComm(c.id); setNewName(c.nom); }}
+                    title="Cliquer pour renommer"
+                  >
+                    <span>{c.nom}</span>
+                    <span style={{ fontSize: '10px', color: '#A8A69F' }}>✏️</span>
+                  </div>
+                )}
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <span style={{ fontSize: '10px', color: '#A8A69F' }}>{c.type}</span>
                   <span style={{ fontSize: '9px', fontWeight: '600', padding: '2px 8px', borderRadius: '20px', background: st.bg, color: st.color }}>{c.statut}</span>
