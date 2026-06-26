@@ -146,3 +146,19 @@ export async function addRole(data) {
 export async function deleteRole(id) {
   await deleteDoc(doc(db, 'roles', id));
 }
+
+export async function getMenuConfig() {
+  const snap = await getDocs(collection(db, 'menuConfig'));
+  return snap.docs[0] ? { id: snap.docs[0].id, ...snap.docs[0].data() } : null;
+}
+
+export async function saveMenuConfig(data) {
+  const existing = await getMenuConfig();
+  if (existing) {
+    await updateDoc(doc(db, 'menuConfig', existing.id), data);
+    return existing.id;
+  } else {
+    const ref = await addDoc(collection(db, 'menuConfig'), data);
+    return ref.id;
+  }
+}

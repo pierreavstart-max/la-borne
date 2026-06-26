@@ -1,8 +1,10 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { auth } from '../../lib/firebase';
+import { storage } from '../../lib/firebase';
+import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { updatePassword } from 'firebase/auth';
-import { getMessages, addMessage, deleteMessage, getFaq, addFaqItem, updateFaqItem, deleteFaqItem, getRoles, addRole, deleteRole, getClients } from '../../lib/db';
+import { getMessages, addMessage, deleteMessage, getFaq, addFaqItem, updateFaqItem, deleteFaqItem, getRoles, addRole, deleteRole, getClients, getMenuConfig, saveMenuConfig } from '../../lib/db';
 
 export default function ParametresPage() {
   const [newPassword, setNewPassword] = useState('');
@@ -24,10 +26,24 @@ export default function ParametresPage() {
   const [clients, setClients] = useState([]);
   const [newRole, setNewRole] = useState('');
 
+  const [menuConfig, setMenuConfig] = useState(null);
+  const [menuBgFile, setMenuBgFile] = useState(null);
+  const [menuPdfFile, setMenuPdfFile] = useState(null);
+  const [menuBgUrl, setMenuBgUrl] = useState('');
+  const [menuPdfUrl, setMenuPdfUrl] = useState('');
+  const [menuFilename, setMenuFilename] = useState('MENU.jpg');
+  const [menuX, setMenuX] = useState(0);
+  const [menuY, setMenuY] = useState(0);
+  const [menuWidth, setMenuWidth] = useState(1080);
+  const [menuHeight, setMenuHeight] = useState(1920);
+  const [savingMenu, setSavingMenu] = useState(false);
+  const [generatingMenu, setGeneratingMenu] = useState(false);
+
   useEffect(() => {
     loadMessages();
     loadFaq();
     loadRoles();
+    loadMenuConfig();
     getClients().then(setClients);
   }, []);
 
@@ -44,6 +60,20 @@ export default function ParametresPage() {
   async function loadRoles() {
     const data = await getRoles();
     setRoles(data);
+  }
+
+  async function loadMenuConfig() {
+    const config = await getMenuConfig();
+    if (config) {
+      setMenuConfig(config);
+      setMenuBgUrl(config.backgroundUrl || '');
+      setMenuPdfUrl(config.pdfUrl || '');
+      setMenuFilename(config.ibFilename || 'MENU.jpg');
+      setMenuX(config.x || 0);
+      setMenuY(config.y || 0);
+      setMenuWidth(config.width || 1080);
+      setMenuHeight(config.height || 1920);
+    }
   }
 
   async function handlePasswordChange() {
@@ -104,6 +134,57 @@ export default function ParametresPage() {
     if (!confirm('Supprimer ce rôle ?')) return;
     await deleteRole(id);
     await loadRoles();
+  }
+
+  async function uploadMenuFile(file, folder) {
+    const path = `${folder}/${Date.now()}_${file.name}`;
+    const fileRef = storageRef(storage, path);
+    await uploadBytes(fileRef, file);
+    return await getDownloadURL(fileRef);
+  }
+
+  async function handleSaveMenuConfig() {
+    setSavingMenu(true);
+    try {
+      let bgUrl = menuBgUrl;
+      let pdfUrl = menuPdfUrl;
+      if (menuBgFile) bgUrl = await uploadMenuFile(menuBgFile, 'menu-backgrounds');
+      if (menuPdfFile) pdfUrl = await uploadMenuFile(menuPdfFile, 'menu-pdfs');
+      await saveMenuConfig({
+        backgroundUrl: bgUrl,
+        pdfUrl: pdfUrl,
+        ibFilename: menuFilename,
+        x: Number(menuX),
+        y: Number(menuY),
+        width: Number(menuWidth),
+        height: Number(menuHeight),
+        updatedAt: new Date().toISOString(),
+      });
+      setMenuBgFile(null);
+      setMenuPdfFile(null);
+      setMenuBgUrl(bgUrl);
+      setMenuPdfUrl(pdfUrl);
+      alert('Configuration menu enregistrée !');
+    } catch (err) {
+      alert('Erreur : ' + err.message);
+    }
+    setSavingMenu(false);
+  }
+
+  async function handleGenerateMenu() {
+    if (!confirm('Générer et publier le menu maintenant ?')) return;
+    setGeneratingMenu(true);
+    try {
+      const res = await fetch('https://la-borne-ffmpeg-production.up.railway.app/process-menu', {
+        method: 'POST',
+      });
+      const data = await res.json();
+      if (data.success) alert('Menu publié sur info-beamer !');
+      else alert('Erreur : ' + (data.error || 'Inconnue'));
+    } catch (err) {
+      alert('Erreur : ' + err.message);
+    }
+    setGeneratingMenu(false);
   }
 
   const inputStyle = {
@@ -245,6 +326,67 @@ export default function ParametresPage() {
               </div>
             ))}
           </div>
+        </div>
+      </div>
+
+      {/* Menu hebdomadaire */}
+      <div style={{ background: '#fff', border: '1px solid #E4E2DC', borderRadius: '10px', overflow: 'hidden', gridColumn: '1 / -1' }}>
+        <div style={{ padding: '14px 16px', borderBottom: '1px solid #E4E2DC', fontSize: '13px', fontWeight: '600', color: '#1A1916' }}>
+          🍽️ Menu hebdomadaire
+        </div>
+        <div style={{ padding: '16px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <div style={{ fontSize: '12px', fontWeight: '500', color: '#1A1916' }}>Configuration (à faire une seule fois)</div>
+
+            <div>
+              <label style={labelStyle}>Image de fond (background)</label>
+              <input type="file" accept="image/*" onChange={e => setMenuBgFile(e.target.files[0])} style={{ ...inputStyle, padding: '5px' }} />
+              {menuBgUrl && !menuBgFile && (
+                <div style={{ fontSize: '10px', color: '#18865A', marginTop: '4px' }}>✓ Background actuel enregistré</div>
+              )}
+            </div>
+
+            <div>
+              <label style={labelStyle}>Nom du fichier sur info-beamer</label>
+              <input value={menuFilename} onChange={e => setMenuFilename(e.target.value)} placeholder="Ex : MENU.jpg" style={inputStyle} />
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+              <div><label style={labelStyle}>Position X (px)</label><input type="number" value={menuX} onChange={e => setMenuX(e.target.value)} style={inputStyle} /></div>
+              <div><label style={labelStyle}>Position Y (px)</label><input type="number" value={menuY} onChange={e => setMenuY(e.target.value)} style={inputStyle} /></div>
+              <div><label style={labelStyle}>Largeur (px)</label><input type="number" value={menuWidth} onChange={e => setMenuWidth(e.target.value)} style={inputStyle} /></div>
+              <div><label style={labelStyle}>Hauteur (px)</label><input type="number" value={menuHeight} onChange={e => setMenuHeight(e.target.value)} style={inputStyle} /></div>
+            </div>
+            <div style={{ fontSize: '10px', color: '#A8A69F' }}>
+              Coordonnées d'incrustation du menu dans le background. Format final : 1080×1920 (portrait).
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <div style={{ fontSize: '12px', fontWeight: '500', color: '#1A1916' }}>Menu de la semaine</div>
+
+            <div>
+              <label style={labelStyle}>PDF du menu (à uploader chaque semaine)</label>
+              <input type="file" accept="application/pdf" onChange={e => setMenuPdfFile(e.target.files[0])} style={{ ...inputStyle, padding: '5px' }} />
+              {menuPdfUrl && !menuPdfFile && (
+                <div style={{ fontSize: '10px', color: '#18865A', marginTop: '4px' }}>✓ PDF actuel enregistré</div>
+              )}
+            </div>
+
+            <button onClick={handleSaveMenuConfig} disabled={savingMenu} style={{ padding: '8px', background: '#2B5CE6', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: '600', cursor: 'pointer', fontFamily: 'inherit' }}>
+              {savingMenu ? 'Enregistrement...' : '💾 Enregistrer la configuration'}
+            </button>
+
+            <button onClick={handleGenerateMenu} disabled={generatingMenu || !menuBgUrl || !menuPdfUrl} style={{ padding: '8px', background: '#18865A', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: '600', cursor: 'pointer', fontFamily: 'inherit' }}>
+              {generatingMenu ? '⏳ Génération en cours...' : '🚀 Générer et publier maintenant'}
+            </button>
+
+            <div style={{ fontSize: '10px', color: '#A8A69F', marginTop: '4px' }}>
+              📅 Auto-publication chaque lundi à 6h00
+            </div>
+          </div>
+
         </div>
       </div>
 
