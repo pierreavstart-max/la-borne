@@ -172,15 +172,13 @@ export default function ParametresPage() {
   }
 
   async function handleGenerateMenu() {
-    if (!confirm('Générer et publier le menu maintenant ?')) return;
+    if (!confirm('Générer et publier le menu maintenant ? Le traitement prend quelques minutes en arrière-plan.')) return;
     setGeneratingMenu(true);
     try {
-      const res = await fetch('https://la-borne-ffmpeg-production.up.railway.app/process-menu', {
+      fetch('https://la-borne-ffmpeg-production.up.railway.app/process-menu', {
         method: 'POST',
-      });
-      const data = await res.json();
-      if (data.success) alert('Menu publié sur info-beamer !');
-      else alert('Erreur : ' + (data.error || 'Inconnue'));
+      }).catch(() => {});
+      alert('Génération lancée ! Le menu sera mis à jour sur info-beamer dans 1-2 minutes.');
     } catch (err) {
       alert('Erreur : ' + err.message);
     }
