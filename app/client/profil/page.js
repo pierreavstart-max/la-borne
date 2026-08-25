@@ -1,13 +1,18 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { auth } from '../../lib/firebase';
 import { updatePassword, reauthenticateWithCredential, EmailAuthProvider } from 'firebase/auth';
+import { getClients, updateClient } from '../../lib/db';
 
 export default function ProfilPage() {
-  const [prenom, setPrenom] = useState('Juliette');
-  const [nom, setNom] = useState('Perrin');
-  const [tel, setTel] = useState('0033329631194');
+  const [clientId, setClientId] = useState(null);
+  const [prenom, setPrenom] = useState('');
+  const [nom, setNom] = useState('');
+  const [tel, setTel] = useState('');
+  const [loadingInfo, setLoadingInfo] = useState(true);
+  const [savingInfo, setSavingInfo] = useState(false);
   const [infoSuccess, setInfoSuccess] = useState('');
+  const [infoError, setInfoError] = useState('');
 
   const [currentPwd, setCurrentPwd] = useState('');
   const [newPwd, setNewPwd] = useState('');
@@ -16,10 +21,40 @@ export default function ProfilPage() {
   const [pwdSuccess, setPwdSuccess] = useState('');
   const [loading, setLoading] = useState(false);
 
-  function saveInfo(e) {
+  useEffect(() => {
+    async function loadClient() {
+      const email = auth.currentUser?.email || localStorage.getItem('clientEmail');
+      if (!email) { setLoadingInfo(false); return; }
+      try {
+        const clients = await getClients();
+        const client = clients.find(c => c.email === email);
+        if (client) {
+          setClientId(client.id);
+          setPrenom(client.prenom || '');
+          setNom(client.nom || '');
+          setTel(client.tel || '');
+        }
+      } catch (err) {
+        console.error(err);
+      }
+      setLoadingInfo(false);
+    }
+    loadClient();
+  }, []);
+
+  async function saveInfo(e) {
     e.preventDefault();
-    setInfoSuccess('Informations enregistrées.');
-    setTimeout(() => setInfoSuccess(''), 3000);
+    setInfoError(''); setInfoSuccess('');
+    if (!clientId) { setInfoError('Impossible de trouver votre fiche client.'); return; }
+    setSavingInfo(true);
+    try {
+      await updateClient(clientId, { prenom, nom, tel });
+      setInfoSuccess('Informations enregistrées.');
+      setTimeout(() => setInfoSuccess(''), 3000);
+    } catch (err) {
+      setInfoError('Erreur : ' + err.message);
+    }
+    setSavingInfo(false);
   }
 
   async function savePwd(e) {
@@ -48,7 +83,7 @@ export default function ProfilPage() {
   };
   const inputStyle = {
     width:'100%',padding:'8px 11px',fontSize:'12px',
-    border:'1px solid #CCC9C0',borderRadius:'6px',fontFamily:'inherit' ,color: '#1A1916'
+    border:'1px solid #CCC9C0',borderRadius:'6px',fontFamily:'inherit',color:'#1A1916'
   };
   const labelStyle = {
     fontSize:'10px',fontWeight:'600',color:'#6B6860',
@@ -64,36 +99,45 @@ export default function ProfilPage() {
         <div style={{padding:'14px 16px',borderBottom:'1px solid #E4E2DC',fontSize:'13px',fontWeight:'600',color:'#1A1916'}}>
           👤 Informations personnelles
         </div>
-        <form onSubmit={saveInfo} style={{padding:'16px'}}>
-          {infoSuccess && (
-            <div style={{padding:'8px 12px',background:'#E6F5ED',border:'1px solid #AADBC5',borderRadius:'6px',fontSize:'11px',color:'#18865A',marginBottom:'12px'}}>
-              {infoSuccess}
+        {loadingInfo ? (
+          <div style={{padding:'20px',textAlign:'center',color:'#A8A69F',fontSize:'12px'}}>Chargement…</div>
+        ) : (
+          <form onSubmit={saveInfo} style={{padding:'16px'}}>
+            {infoSuccess && (
+              <div style={{padding:'8px 12px',background:'#E6F5ED',border:'1px solid #AADBC5',borderRadius:'6px',fontSize:'11px',color:'#18865A',marginBottom:'12px'}}>
+                {infoSuccess}
+              </div>
+            )}
+            {infoError && (
+              <div style={{padding:'8px 12px',background:'#FCEAEA',border:'1px solid #EABABA',borderRadius:'6px',fontSize:'11px',color:'#C02B2B',marginBottom:'12px'}}>
+                {infoError}
+              </div>
+            )}
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px',marginBottom:'10px'}}>
+              <div>
+                <label style={labelStyle}>Prénom</label>
+                <input value={prenom} onChange={e=>setPrenom(e.target.value)} style={inputStyle}/>
+              </div>
+              <div>
+                <label style={labelStyle}>Nom</label>
+                <input value={nom} onChange={e=>setNom(e.target.value)} style={inputStyle}/>
+              </div>
             </div>
-          )}
-          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px',marginBottom:'10px'}}>
-            <div>
-              <label style={labelStyle}>Prénom</label>
-              <input value={prenom} onChange={e=>setPrenom(e.target.value)} style={inputStyle}/>
+            <div style={{marginBottom:'10px'}}>
+              <label style={labelStyle}>Email</label>
+              <input value={auth.currentUser?.email || ''} style={{...inputStyle,background:'#F7F6F3',color:'#A8A69F'}} readOnly/>
             </div>
-            <div>
-              <label style={labelStyle}>Nom</label>
-              <input value={nom} onChange={e=>setNom(e.target.value)} style={inputStyle}/>
+            <div style={{marginBottom:'14px'}}>
+              <label style={labelStyle}>Téléphone</label>
+              <input value={tel} onChange={e=>setTel(e.target.value)} style={inputStyle}/>
             </div>
-          </div>
-          <div style={{marginBottom:'10px'}}>
-            <label style={labelStyle}>Email</label>
-            <input value={auth.currentUser?.email || ''} style={{...inputStyle,background:'#F7F6F3',color:'#A8A69F'}} readOnly/>
-          </div>
-          <div style={{marginBottom:'14px'}}>
-            <label style={labelStyle}>Téléphone</label>
-            <input value={tel} onChange={e=>setTel(e.target.value)} style={inputStyle}/>
-          </div>
-          <div style={{display:'flex',justifyContent:'flex-end'}}>
-            <button type="submit" style={{padding:'8px 16px',background:'#2B5CE6',color:'#fff',border:'none',borderRadius:'6px',fontSize:'12px',fontWeight:'600',cursor:'pointer',fontFamily:'inherit'}}>
-              Enregistrer
-            </button>
-          </div>
-        </form>
+            <div style={{display:'flex',justifyContent:'flex-end'}}>
+              <button type="submit" disabled={savingInfo} style={{padding:'8px 16px',background:'#2B5CE6',color:'#fff',border:'none',borderRadius:'6px',fontSize:'12px',fontWeight:'600',cursor:'pointer',fontFamily:'inherit'}}>
+                {savingInfo ? 'Enregistrement…' : 'Enregistrer'}
+              </button>
+            </div>
+          </form>
+        )}
       </div>
 
       {/* Mot de passe */}
