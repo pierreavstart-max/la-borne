@@ -5,6 +5,11 @@ import {
   query, where, orderBy, serverTimestamp
 } from 'firebase/firestore';
 
+// Helper : normalise un email en minuscules
+function normalizeEmail(email) {
+  return email ? email.toLowerCase().trim() : email;
+}
+
 // ── CLIENTS ──
 export async function getClients() {
   const snap = await getDocs(collection(db, 'clients'));
@@ -14,12 +19,15 @@ export async function getClients() {
 export async function addClient(data) {
   return await addDoc(collection(db, 'clients'), {
     ...data,
+    email: normalizeEmail(data.email),
     createdAt: serverTimestamp()
   });
 }
 
 export async function updateClient(id, data) {
-  await updateDoc(doc(db, 'clients', id), data);
+  const cleanData = { ...data };
+  if (cleanData.email) cleanData.email = normalizeEmail(cleanData.email);
+  await updateDoc(doc(db, 'clients', id), cleanData);
 }
 
 export async function deleteClient(id) {
@@ -33,14 +41,18 @@ export async function getBornes() {
 }
 
 export async function addBorne(data) {
+  const cleanData = { ...data };
+  if (cleanData.clientEmail) cleanData.clientEmail = normalizeEmail(cleanData.clientEmail);
   return await addDoc(collection(db, 'bornes'), {
-    ...data,
+    ...cleanData,
     createdAt: serverTimestamp()
   });
 }
 
 export async function updateBorne(id, data) {
-  await updateDoc(doc(db, 'bornes', id), data);
+  const cleanData = { ...data };
+  if (cleanData.clientEmail) cleanData.clientEmail = normalizeEmail(cleanData.clientEmail);
+  await updateDoc(doc(db, 'bornes', id), cleanData);
 }
 
 export async function deleteBorne(id) {
@@ -54,14 +66,16 @@ export async function getDemandes() {
 }
 
 export async function getDemandesClient(email) {
-  const q = query(collection(db, 'demandes'), where('clientEmail', '==', email));
+  const q = query(collection(db, 'demandes'), where('clientEmail', '==', normalizeEmail(email)));
   const snap = await getDocs(q);
   return snap.docs.map(d => ({id: d.id, ...d.data()}));
 }
 
 export async function addDemande(data) {
+  const cleanData = { ...data };
+  if (cleanData.clientEmail) cleanData.clientEmail = normalizeEmail(cleanData.clientEmail);
   return await addDoc(collection(db, 'demandes'), {
-    ...data,
+    ...cleanData,
     statut: 'En attente',
     createdAt: serverTimestamp()
   });
@@ -72,7 +86,9 @@ export async function archiverDemande(id) {
 }
 
 export async function updateDemande(id, data) {
-  await updateDoc(doc(db, 'demandes', id), data);
+  const cleanData = { ...data };
+  if (cleanData.clientEmail) cleanData.clientEmail = normalizeEmail(cleanData.clientEmail);
+  await updateDoc(doc(db, 'demandes', id), cleanData);
 }
 
 // ── MESSAGES ──
@@ -82,8 +98,12 @@ export async function getMessages() {
 }
 
 export async function addMessage(data) {
+  const cleanData = { ...data };
+  if (cleanData.destType === 'client' && cleanData.dest) {
+    cleanData.dest = normalizeEmail(cleanData.dest);
+  }
   return await addDoc(collection(db, 'messages'), {
-    ...data,
+    ...cleanData,
     createdAt: serverTimestamp()
   });
 }
@@ -94,7 +114,7 @@ export async function deleteMessage(id) {
 
 // ── NOTIFICATIONS ──
 export async function getNotifications(clientEmail) {
-  const q = query(collection(db, 'notifications'), where('clientEmail', '==', clientEmail));
+  const q = query(collection(db, 'notifications'), where('clientEmail', '==', normalizeEmail(clientEmail)));
   const snap = await getDocs(q);
   return snap.docs.map(d => ({id: d.id, ...d.data()}));
 }
@@ -104,8 +124,10 @@ export async function deleteNotification(id) {
 }
 
 export async function addNotification(data) {
+  const cleanData = { ...data };
+  if (cleanData.clientEmail) cleanData.clientEmail = normalizeEmail(cleanData.clientEmail);
   return await addDoc(collection(db, 'notifications'), {
-    ...data,
+    ...cleanData,
     createdAt: serverTimestamp()
   });
 }
